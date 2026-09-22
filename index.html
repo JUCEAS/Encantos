@@ -57,7 +57,7 @@
   <!-- ================= REPORTES ================= -->
   <section id="vista-reportes" class="vista">
     <div class="card" style="flex-direction:column;">
-      <h3 style="margin-top:0;">Generar reporte PDF</h3>
+      <h3 style="margin-top:0;">Reporte de ventas</h3>
       <label>Desde</label>
       <input type="date" id="reporteDesde">
       <label>Hasta</label>
@@ -67,6 +67,26 @@
       </div>
       <div class="fila-botones">
         <button class="btn secundario" id="btnCompartirReporte">📤 Compartir por WhatsApp</button>
+      </div>
+    </div>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Lista de clientes</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">Nombre, celular y fecha de registro de todos tus clientes.</p>
+      <div class="fila-botones">
+        <button class="btn" id="btnGenerarReporteClientes">📄 Descargar PDF</button>
+      </div>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnCompartirReporteClientes">📤 Compartir por WhatsApp</button>
+      </div>
+    </div>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Reporte de inventario</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">Cuántas plantas y productos tienes, por categoría, y el valor total de tu inventario.</p>
+      <div class="fila-botones">
+        <button class="btn" id="btnGenerarReporteInventario">📄 Descargar PDF</button>
+      </div>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnCompartirReporteInventario">📤 Compartir por WhatsApp</button>
       </div>
     </div>
     <div class="card" style="flex-direction:column;">

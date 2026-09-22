@@ -431,23 +431,45 @@ document.getElementById('btnCerrarHistorial').addEventListener('click', () => oc
 // REPORTES Y RESPALDO
 // =========================================================
 
+function manejarErrorCompartir(err) {
+  // El usuario cancela el menú de compartir: no es un error real, se ignora.
+  if (err.name !== 'AbortError') {
+    console.error(err);
+    alert('No se pudo compartir el reporte.');
+  }
+}
+
 document.getElementById('btnGenerarReporte').addEventListener('click', async () => {
   const desde = document.getElementById('reporteDesde').value || null;
   const hasta = document.getElementById('reporteHasta').value || null;
-  await Reportes.generarReportePDF({ desde, hasta });
+  await Reportes.generarReporteVentasPDF({ desde, hasta });
 });
 
 document.getElementById('btnCompartirReporte').addEventListener('click', async () => {
   const desde = document.getElementById('reporteDesde').value || null;
   const hasta = document.getElementById('reporteHasta').value || null;
   try {
-    await Reportes.compartirReportePDF({ desde, hasta });
+    await Reportes.compartirReporteVentasPDF({ desde, hasta });
   } catch (err) {
-    // El usuario cancela el menú de compartir: no es un error real, se ignora.
-    if (err.name !== 'AbortError') {
-      console.error(err);
-      alert('No se pudo compartir el reporte.');
-    }
+    manejarErrorCompartir(err);
+  }
+});
+
+document.getElementById('btnGenerarReporteClientes').addEventListener('click', () => Reportes.generarReporteClientesPDF());
+document.getElementById('btnCompartirReporteClientes').addEventListener('click', async () => {
+  try {
+    await Reportes.compartirReporteClientesPDF();
+  } catch (err) {
+    manejarErrorCompartir(err);
+  }
+});
+
+document.getElementById('btnGenerarReporteInventario').addEventListener('click', () => Reportes.generarReporteInventarioPDF());
+document.getElementById('btnCompartirReporteInventario').addEventListener('click', async () => {
+  try {
+    await Reportes.compartirReporteInventarioPDF();
+  } catch (err) {
+    manejarErrorCompartir(err);
   }
 });
 

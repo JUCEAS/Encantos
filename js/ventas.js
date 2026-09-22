@@ -36,8 +36,13 @@ async function registrarVenta(datos) {
 
 async function listarVentas({ desde = null, hasta = null } = {}) {
   let ventas = await DB.obtenerTodos(DB.STORES.ventas);
-  if (desde) ventas = ventas.filter((v) => new Date(v.fecha) >= new Date(desde));
-  if (hasta) ventas = ventas.filter((v) => new Date(v.fecha) <= new Date(hasta));
+  // Los campos "desde"/"hasta" vienen de un selector de fecha (solo día, sin hora),
+  // y hay que interpretarlos como el inicio y el final de ESE día en la hora local
+  // del teléfono. Si se comparan tal cual (sin hora), JavaScript los toma como
+  // medianoche en UTC, y como Honduras está varias horas detrás de UTC, las ventas
+  // registradas en la tarde/noche quedaban excluidas del reporte de "hoy".
+  if (desde) ventas = ventas.filter((v) => new Date(v.fecha) >= new Date(desde + 'T00:00:00'));
+  if (hasta) ventas = ventas.filter((v) => new Date(v.fecha) <= new Date(hasta + 'T23:59:59.999'));
   ventas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
   return ventas;
 }
