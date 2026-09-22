@@ -97,10 +97,8 @@ async function eliminarProducto(id) {
 }
 
 async function ajustarStock(id, cambio) {
-  const producto = await DB.obtener(DB.STORES.productos, id);
-  if (!producto) return;
-  producto.stock = Math.max(0, (producto.stock || 0) + cambio);
-  return DB.actualizar(DB.STORES.productos, producto);
+  // Incremento atómico: seguro aunque los dos celulares vendan al mismo tiempo.
+  return DB.incrementarCampo(DB.STORES.productos, id, 'stock', cambio);
 }
 
 window.Inventario = {

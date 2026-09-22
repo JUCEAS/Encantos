@@ -1,8 +1,26 @@
-// db.js — Capa de acceso a IndexedDB para Encantos
-// Todo se guarda localmente en el teléfono. Nada sale a internet.
+// db.js — Capa de acceso a datos para Encantos, ahora respaldada por Firestore
+// para que el inventario, los clientes y las ventas se sincronicen automáticamente
+// entre los celulares que usan la app. Firestore guarda una copia local en el
+// teléfono (funciona sin internet) y sincroniza sola cuando hay conexión.
 
-const DB_NAME = 'encantos-db';
-const DB_VERSION = 1;
+const firebaseConfig = {
+  apiKey: "AIzaSyArwo4lDPBxUNk-eafoqedY0Ylp6FodOu0",
+  authDomain: "encantos-vivero.firebaseapp.com",
+  projectId: "encantos-vivero",
+  storageBucket: "encantos-vivero.firebasestorage.app",
+  messagingSenderId: "892959442776",
+  appId: "1:892959442776:web:e51c8af2b425f7f11fc72d",
+};
+
+firebase.initializeApp(firebaseConfig);
+const firestoreDB = firebase.firestore();
+const firebaseAuth = firebase.auth();
+
+// Persistencia sin conexión: permite seguir usando la app sin internet y
+// sincroniza automáticamente en cuanto vuelve la señal.
+firestoreDB.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+  console.warn('No se pudo activar la persistencia sin conexión de Firestore', err.code);
+});
 
 const STORES = {
   productos: 'productos',
@@ -10,115 +28,68 @@ const STORES = {
   ventas: 'ventas',
 };
 
-let dbInstance = null;
+// Sesión anónima: identifica el dispositivo sin pedir usuario ni contraseña.
+// Ambos celulares, al compartir la misma configuración de Firebase, leen y
+// escriben en la misma base de datos.
+let authReadyResolve;
+const authReady = new Promise((resolve) => { authReadyResolve = resolve; });
+firebaseAuth.onAuthStateChanged((user) => {
+  if (user) authReadyResolve(user);
+});
+firebaseAuth.signInAnonymously().catch((err) => {
+  console.error('No se pudo iniciar sesión anónima en Firebase', err);
+});
 
-function abrirDB() {
-  if (dbInstance) return Promise.resolve(dbInstance);
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+function coleccion(nombreTienda) {
+  return firestoreDB.collection(nombreTienda);
+}
 
-    req.onupgradeneeded = (event) => {
-      const db = event.target.result;
+async function agregar(nombreTienda, objeto) {
+  await authReady;
+  const ref = await coleccion(nombreTienda).add(objeto);
+  return ref.id;
+}
 
-      if (!db.objectStoreNames.contains(STORES.productos)) {
-        const store = db.createObjectStore(STORES.productos, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('nombre', 'nombre', { unique: false });
-        store.createIndex('categoria', 'categoria', { unique: false });
-      }
+async function actualizar(nombreTienda, objeto) {
+  await authReady;
+  const { id, ...resto } = objeto;
+  await coleccion(nombreTienda).doc(id).set(resto, { merge: false });
+  return id;
+}
 
-      if (!db.objectStoreNames.contains(STORES.clientes)) {
-        const store = db.createObjectStore(STORES.clientes, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('nombre', 'nombre', { unique: false });
-        store.createIndex('celular', 'celular', { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains(STORES.ventas)) {
-        const store = db.createObjectStore(STORES.ventas, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('fecha', 'fecha', { unique: false });
-        store.createIndex('clienteId', 'clienteId', { unique: false });
-        store.createIndex('productoId', 'productoId', { unique: false });
-      }
-    };
-
-    req.onsuccess = (event) => {
-      dbInstance = event.target.result;
-      resolve(dbInstance);
-    };
-
-    req.onerror = (event) => reject(event.target.error);
+// Incremento atómico (por ejemplo, descontar stock). Evita que dos celulares
+// vendiendo al mismo tiempo se "pisen" el uno al otro al escribir.
+async function incrementarCampo(nombreTienda, id, campo, delta) {
+  await authReady;
+  return coleccion(nombreTienda).doc(id).update({
+    [campo]: firebase.firestore.FieldValue.increment(delta),
   });
 }
 
-function conTienda(nombreTienda, modo, callback) {
-  return abrirDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(nombreTienda, modo);
-      const store = tx.objectStore(nombreTienda);
-      const resultado = callback(store);
-      tx.oncomplete = () => resolve(resultado);
-      tx.onerror = (e) => reject(e.target.error);
-    });
-  });
+async function eliminar(nombreTienda, id) {
+  await authReady;
+  await coleccion(nombreTienda).doc(id).delete();
 }
 
-function agregar(nombreTienda, objeto) {
-  return abrirDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(nombreTienda, 'readwrite');
-      const store = tx.objectStore(nombreTienda);
-      const req = store.add(objeto);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = (e) => reject(e.target.error);
-    });
-  });
+async function obtener(nombreTienda, id) {
+  await authReady;
+  const snap = await coleccion(nombreTienda).doc(id).get();
+  return snap.exists ? { id: snap.id, ...snap.data() } : null;
 }
 
-function actualizar(nombreTienda, objeto) {
-  return abrirDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(nombreTienda, 'readwrite');
-      const store = tx.objectStore(nombreTienda);
-      const req = store.put(objeto);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = (e) => reject(e.target.error);
-    });
-  });
+async function obtenerTodos(nombreTienda) {
+  await authReady;
+  const snap = await coleccion(nombreTienda).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-function eliminar(nombreTienda, id) {
-  return abrirDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(nombreTienda, 'readwrite');
-      const store = tx.objectStore(nombreTienda);
-      const req = store.delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror = (e) => reject(e.target.error);
-    });
-  });
-}
-
-function obtener(nombreTienda, id) {
-  return abrirDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(nombreTienda, 'readonly');
-      const store = tx.objectStore(nombreTienda);
-      const req = store.get(id);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = (e) => reject(e.target.error);
-    });
-  });
-}
-
-function obtenerTodos(nombreTienda) {
-  return abrirDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(nombreTienda, 'readonly');
-      const store = tx.objectStore(nombreTienda);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = (e) => reject(e.target.error);
-    });
-  });
+// Se llama cuando cambia algo en una colección (propio o del otro celular) y
+// permite refrescar la pantalla automáticamente.
+function escucharCambios(nombreTienda, callback) {
+  return coleccion(nombreTienda).onSnapshot(
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => console.warn('Error escuchando cambios de ' + nombreTienda, err)
+  );
 }
 
 // Exportar toda la base de datos como un objeto plano (para respaldo)
@@ -129,7 +100,7 @@ async function exportarTodo() {
     obtenerTodos(STORES.ventas),
   ]);
   return {
-    version: DB_VERSION,
+    version: 2,
     exportadoEl: new Date().toISOString(),
     productos,
     clientes,
@@ -137,30 +108,66 @@ async function exportarTodo() {
   };
 }
 
-// Importar un respaldo (reemplaza todo el contenido actual)
-async function importarTodo(data) {
-  const db = await abrirDB();
-  const nombres = [STORES.productos, STORES.clientes, STORES.ventas];
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(nombres, 'readwrite');
-    nombres.forEach((nombre) => tx.objectStore(nombre).clear());
-
-    (data.productos || []).forEach((p) => tx.objectStore(STORES.productos).put(p));
-    (data.clientes || []).forEach((c) => tx.objectStore(STORES.clientes).put(c));
-    (data.ventas || []).forEach((v) => tx.objectStore(STORES.ventas).put(v));
-
-    tx.oncomplete = () => resolve();
-    tx.onerror = (e) => reject(e.target.error);
+async function limpiarColeccion(nombreTienda) {
+  const snap = await coleccion(nombreTienda).get();
+  const lotes = [];
+  let batch = firestoreDB.batch();
+  let contador = 0;
+  snap.docs.forEach((d) => {
+    batch.delete(d.ref);
+    contador++;
+    if (contador === 400) {
+      lotes.push(batch.commit());
+      batch = firestoreDB.batch();
+      contador = 0;
+    }
   });
+  if (contador > 0) lotes.push(batch.commit());
+  return Promise.all(lotes);
+}
+
+// Importar un respaldo (reemplaza todo el contenido actual de la nube)
+async function importarTodo(data) {
+  await authReady;
+  await Promise.all([
+    limpiarColeccion(STORES.productos),
+    limpiarColeccion(STORES.clientes),
+    limpiarColeccion(STORES.ventas),
+  ]);
+
+  const escrituras = [];
+  let batch = firestoreDB.batch();
+  let contador = 0;
+
+  function agregarAlLote(nombreTienda, registro) {
+    const { id, ...resto } = registro;
+    const ref = id ? coleccion(nombreTienda).doc(String(id)) : coleccion(nombreTienda).doc();
+    batch.set(ref, resto);
+    contador++;
+    if (contador === 400) {
+      escrituras.push(batch.commit());
+      batch = firestoreDB.batch();
+      contador = 0;
+    }
+  }
+
+  (data.productos || []).forEach((p) => agregarAlLote(STORES.productos, p));
+  (data.clientes || []).forEach((c) => agregarAlLote(STORES.clientes, c));
+  (data.ventas || []).forEach((v) => agregarAlLote(STORES.ventas, v));
+
+  if (contador > 0) escrituras.push(batch.commit());
+  await Promise.all(escrituras);
 }
 
 window.DB = {
   STORES,
   agregar,
   actualizar,
+  incrementarCampo,
   eliminar,
   obtener,
   obtenerTodos,
+  escucharCambios,
   exportarTodo,
   importarTodo,
 };

@@ -60,7 +60,7 @@ async function refrescarInventario(filtro = '') {
   `).join('');
 
   contenedor.querySelectorAll('.card').forEach((card) => {
-    card.addEventListener('click', () => mostrarOpcionesProducto(parseInt(card.dataset.id, 10)));
+    card.addEventListener('click', () => mostrarOpcionesProducto(card.dataset.id));
   });
 }
 
@@ -244,7 +244,7 @@ async function manejarSeleccionFotoBusqueda(e) {
 
     resultadosDiv.querySelectorAll('.resultado-visual').forEach((el) => {
       el.addEventListener('click', async () => {
-        const id = parseInt(el.dataset.id, 10);
+        const id = el.dataset.id;
         const productos = await Inventario.listarProductos();
         const producto = productos.find((p) => p.id === id);
         ocultarModal('modalBusquedaVisual');
@@ -296,7 +296,7 @@ document.getElementById('btnConfirmarVenta').addEventListener('click', async () 
   try {
     await Ventas.registrarVenta({
       productoId: ventaProductoActual.id,
-      clienteId: document.getElementById('campoClienteVenta').value ? parseInt(document.getElementById('campoClienteVenta').value, 10) : null,
+      clienteId: document.getElementById('campoClienteVenta').value || null,
       cantidad: document.getElementById('campoCantidadVenta').value,
       precioVenta: document.getElementById('campoPrecioVenta').value,
     });
@@ -356,7 +356,7 @@ async function refrescarClientes(filtro = '') {
   `).join('');
 
   contenedor.querySelectorAll('.card').forEach((card) => {
-    card.addEventListener('click', () => mostrarOpcionesCliente(parseInt(card.dataset.id, 10)));
+    card.addEventListener('click', () => mostrarOpcionesCliente(card.dataset.id));
   });
 }
 
@@ -463,3 +463,9 @@ if ('serviceWorker' in navigator) {
 }
 
 refrescarInventario();
+
+// Sincronización en tiempo real: cuando el otro celular agrega, edita o vende
+// algo, esta pantalla se actualiza sola (y al revés).
+DB.escucharCambios(DB.STORES.productos, () => refrescarInventario(document.getElementById('buscarTexto').value));
+DB.escucharCambios(DB.STORES.clientes, () => refrescarClientes(document.getElementById('buscarCliente').value));
+DB.escucharCambios(DB.STORES.ventas, () => refrescarVentas());
