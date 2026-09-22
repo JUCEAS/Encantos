@@ -5,7 +5,9 @@ async function guardarCliente(datos) {
     nombre: datos.nombre.trim(),
     celular: (datos.celular || '').trim(),
     notas: (datos.notas || '').trim(),
-    creadoEl: new Date().toISOString(),
+    // Al editar, se conserva la fecha original de registro del cliente
+    // (no se debe "reiniciar" cada vez que se corrige un dato).
+    creadoEl: datos.creadoEl || new Date().toISOString(),
   };
   if (datos.id) {
     cliente.id = datos.id;

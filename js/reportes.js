@@ -5,7 +5,7 @@ function formatoLempiras(valor) {
   return 'L. ' + (valor || 0).toFixed(2);
 }
 
-async function generarReportePDF({ desde = null, hasta = null, titulo = 'Reporte de Ventas' } = {}) {
+async function construirPDF({ desde = null, hasta = null, titulo = 'Reporte de Ventas' } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
@@ -85,7 +85,35 @@ async function generarReportePDF({ desde = null, hasta = null, titulo = 'Reporte
   });
 
   const nombreArchivo = `encantos-reporte-${new Date().toISOString().slice(0, 10)}.pdf`;
+  return { doc, nombreArchivo };
+}
+
+// Descarga el PDF directamente al teléfono (funciona sin internet).
+async function generarReportePDF(opciones = {}) {
+  const { doc, nombreArchivo } = await construirPDF(opciones);
   doc.save(nombreArchivo);
 }
 
-window.Reportes = { generarReportePDF };
+// Abre el menú "Compartir" del teléfono (WhatsApp, correo, imprimir, etc.).
+// No necesita internet para abrirse; solo se usaría internet si eliges enviarlo
+// por WhatsApp u otra app que sí lo requiera.
+async function compartirReportePDF(opciones = {}) {
+  const { doc, nombreArchivo } = await construirPDF(opciones);
+  const blob = doc.output('blob');
+  const archivo = new File([blob], nombreArchivo, { type: 'application/pdf' });
+
+  if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+    await navigator.share({
+      files: [archivo],
+      title: 'Reporte Encantos',
+      text: 'Reporte de ventas - Encantos',
+    });
+  } else {
+    // El teléfono no soporta compartir archivos directamente: se descarga
+    // y se puede adjuntar manualmente en WhatsApp.
+    doc.save(nombreArchivo);
+    alert('Tu navegador no permite compartir directamente. El PDF se descargó; puedes adjuntarlo manualmente en WhatsApp desde tus archivos descargados.');
+  }
+}
+
+window.Reportes = { generarReportePDF, compartirReportePDF };

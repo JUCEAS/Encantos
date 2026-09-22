@@ -5,6 +5,7 @@ let fotoTemporalDataUrl = null;
 let embeddingTemporal = null;
 let ventaProductoActual = null;
 let clienteEditandoId = null;
+let clienteEditandoCreadoEl = null;
 
 // ---------- Navegación entre pestañas ----------
 document.querySelectorAll('.tabbar .tab').forEach((btn) => {
@@ -351,6 +352,7 @@ async function refrescarClientes(filtro = '') {
       <div class="info">
         <h3>${escaparHtml(c.nombre)}</h3>
         <p>${escaparHtml(c.celular || 'Sin celular')}</p>
+        ${c.creadoEl ? `<p style="font-size:12px;color:#888;">Cliente desde: ${new Date(c.creadoEl).toLocaleDateString()}</p>` : ''}
       </div>
     </div>
   `).join('');
@@ -376,6 +378,7 @@ async function mostrarOpcionesCliente(id) {
 
 function abrirModalCliente(cliente = null) {
   clienteEditandoId = cliente ? cliente.id : null;
+  clienteEditandoCreadoEl = cliente ? cliente.creadoEl : null;
   document.getElementById('tituloModalCliente').textContent = cliente ? 'Editar cliente' : 'Nuevo cliente';
   document.getElementById('campoNombreCliente').value = cliente?.nombre || '';
   document.getElementById('campoCelularCliente').value = cliente?.celular || '';
@@ -391,6 +394,7 @@ document.getElementById('btnGuardarCliente').addEventListener('click', async () 
 
   await Clientes.guardarCliente({
     id: clienteEditandoId,
+    creadoEl: clienteEditandoCreadoEl,
     nombre,
     celular: document.getElementById('campoCelularCliente').value,
     notas: document.getElementById('campoNotasCliente').value,
@@ -431,6 +435,20 @@ document.getElementById('btnGenerarReporte').addEventListener('click', async () 
   const desde = document.getElementById('reporteDesde').value || null;
   const hasta = document.getElementById('reporteHasta').value || null;
   await Reportes.generarReportePDF({ desde, hasta });
+});
+
+document.getElementById('btnCompartirReporte').addEventListener('click', async () => {
+  const desde = document.getElementById('reporteDesde').value || null;
+  const hasta = document.getElementById('reporteHasta').value || null;
+  try {
+    await Reportes.compartirReportePDF({ desde, hasta });
+  } catch (err) {
+    // El usuario cancela el menú de compartir: no es un error real, se ignora.
+    if (err.name !== 'AbortError') {
+      console.error(err);
+      alert('No se pudo compartir el reporte.');
+    }
+  }
 });
 
 document.getElementById('btnExportar').addEventListener('click', () => Backup.exportarRespaldo());
