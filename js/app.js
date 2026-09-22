@@ -1,6 +1,7 @@
 // app.js — Controlador principal: navegación entre pestañas y conexión de la interfaz
 
 let productoEditandoId = null;
+let productoEditandoCreadoEl = null;
 let fotoTemporalDataUrl = null;
 let embeddingTemporal = null;
 let ventaProductoActual = null;
@@ -105,6 +106,7 @@ document.getElementById('buscarTexto').addEventListener('input', (e) => refresca
 
 async function abrirModalProducto(producto = null) {
   productoEditandoId = producto ? producto.id : null;
+  productoEditandoCreadoEl = producto ? producto.creadoEl : null;
   fotoTemporalDataUrl = producto ? producto.foto : null;
   embeddingTemporal = producto ? producto.embedding : null;
 
@@ -218,6 +220,7 @@ document.getElementById('btnGuardarProducto').addEventListener('click', async ()
 
   await Inventario.guardarProducto({
     id: productoEditandoId,
+    creadoEl: productoEditandoCreadoEl,
     nombre,
     categoria: document.getElementById('campoCategoria').value,
     descripcion: document.getElementById('campoDescripcion').value,
@@ -368,7 +371,7 @@ async function refrescarVentas() {
   }
 
   contenedor.innerHTML = ventas.map((v) => `
-    <div class="card">
+    <div class="card" data-id="${v.id}">
       <div class="info">
         <h3>${escaparHtml(v.nombreProducto)} &times;${v.cantidad}</h3>
         <p>${new Date(v.fecha).toLocaleString()}</p>
@@ -376,6 +379,20 @@ async function refrescarVentas() {
       </div>
     </div>
   `).join('');
+
+  contenedor.querySelectorAll('.card').forEach((card) => {
+    card.addEventListener('click', () => mostrarOpcionesVenta(card.dataset.id));
+  });
+}
+
+async function mostrarOpcionesVenta(id) {
+  const ventas = await Ventas.listarVentas();
+  const venta = ventas.find((v) => v.id === id);
+  if (!venta) return;
+  if (!confirm(`${venta.nombreProducto} x${venta.cantidad}\nTotal: L. ${venta.total.toFixed(2)}\n\n¿Anular esta venta? El stock vendido regresará al inventario.`)) return;
+  await Ventas.eliminarVenta(id);
+  refrescarVentas();
+  refrescarInventario();
 }
 
 // =========================================================
@@ -427,10 +444,19 @@ function abrirModalCliente(cliente = null) {
   document.getElementById('campoNombreCliente').value = cliente?.nombre || '';
   document.getElementById('campoCelularCliente').value = cliente?.celular || '';
   document.getElementById('campoNotasCliente').value = cliente?.notas || '';
+  document.getElementById('filaEliminarCliente').style.display = cliente ? 'flex' : 'none';
   mostrarModal('modalCliente');
 }
 
 document.getElementById('btnCancelarCliente').addEventListener('click', () => ocultarModal('modalCliente'));
+
+document.getElementById('btnEliminarCliente').addEventListener('click', async () => {
+  if (!clienteEditandoId) return;
+  if (!confirm('¿Eliminar este cliente? Su historial de compras pasadas se conservará, pero ya no podrás seleccionarlo en ventas nuevas.')) return;
+  await Clientes.eliminarCliente(clienteEditandoId);
+  ocultarModal('modalCliente');
+  refrescarClientes();
+});
 
 document.getElementById('btnGuardarCliente').addEventListener('click', async () => {
   const nombre = document.getElementById('campoNombreCliente').value.trim();

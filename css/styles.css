@@ -36,14 +36,6 @@ header.topbar h1 {
   margin: 0;
 }
 
-header.topbar .icon-btn {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-}
-
 main {
   padding: 12px;
   max-width: 640px;

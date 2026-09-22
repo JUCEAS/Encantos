@@ -65,7 +65,9 @@ async function guardarProducto(datos) {
     stock: parseInt(datos.stock, 10) || 0,
     foto: datos.foto || null,
     embedding: datos.embedding || null, // huella visual para búsqueda por foto
-    creadoEl: new Date().toISOString(),
+    // Al editar, se conserva la fecha original en que se agregó el producto
+    // (mismo criterio que clientes y proveedores).
+    creadoEl: datos.creadoEl || new Date().toISOString(),
   };
 
   if (datos.id) {
