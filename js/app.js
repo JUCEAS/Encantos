@@ -53,6 +53,7 @@ async function refrescarInventario(filtro = '') {
         <span class="chip">${p.categoria}</span>
         <h3>${escaparHtml(p.nombre)}</h3>
         <p>${escaparHtml(p.descripcion || '')}</p>
+        ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? '☀️ ' + p.tipoSol : '', p.riego ? '💧 ' + p.riego : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
         <p class="precio">L. ${p.precio.toFixed(2)} &middot; <span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span></p>
       </div>
     </div>
@@ -94,9 +95,19 @@ function abrirModalProducto(producto = null) {
   const select = document.getElementById('campoCategoria');
   select.innerHTML = Inventario.CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join('');
 
+  const selectSol = document.getElementById('campoTipoSol');
+  selectSol.innerHTML = '<option value="">No aplica</option>' +
+    Inventario.TIPOS_SOL.map((s) => `<option value="${s}">${s}</option>`).join('');
+
+  const selectRiego = document.getElementById('campoRiego');
+  selectRiego.innerHTML = '<option value="">No aplica</option>' +
+    Inventario.TIPOS_RIEGO.map((r) => `<option value="${r}">${r}</option>`).join('');
+
   document.getElementById('campoNombre').value = producto?.nombre || '';
-  select.value = producto?.categoria || 'Planta';
+  select.value = producto?.categoria || Inventario.CATEGORIAS[0];
   document.getElementById('campoDescripcion').value = producto?.descripcion || '';
+  selectSol.value = producto?.tipoSol || '';
+  selectRiego.value = producto?.riego || '';
   document.getElementById('campoCosto').value = producto?.costo ?? '';
   document.getElementById('campoPrecio').value = producto?.precio ?? '';
   document.getElementById('campoStock').value = producto?.stock ?? '';
@@ -167,6 +178,8 @@ document.getElementById('btnGuardarProducto').addEventListener('click', async ()
     nombre,
     categoria: document.getElementById('campoCategoria').value,
     descripcion: document.getElementById('campoDescripcion').value,
+    tipoSol: document.getElementById('campoTipoSol').value,
+    riego: document.getElementById('campoRiego').value,
     costo: document.getElementById('campoCosto').value,
     precio: document.getElementById('campoPrecio').value,
     stock: document.getElementById('campoStock').value,

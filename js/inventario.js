@@ -1,6 +1,36 @@
 // inventario.js — Alta, edición y listado de productos (plantas e insumos)
 
-const CATEGORIAS = ['Planta', 'Piedra pómez', 'Abono', 'Tierra', 'Otro insumo'];
+const CATEGORIAS = [
+  // Plantas, por tipo
+  'Cactus',
+  'Suculenta',
+  'Planta de hoja ancha / follaje',
+  'Planta de flor',
+  'Palma',
+  'Trepadora / enredadera',
+  'Helecho',
+  'Arbusto ornamental',
+  'Árbol ornamental',
+  'Planta aromática / herbácea',
+  'Planta acuática',
+  'Bonsái',
+  // Insumos de vivero
+  'Piedra pómez',
+  'Abono',
+  'Tierra',
+  'Maceta',
+  'Otro insumo',
+];
+
+const TIPOS_SOL = ['Sol completo', 'Medio sol', 'Sombra'];
+
+const TIPOS_RIEGO = [
+  'Diario / abundante',
+  '2 a 3 veces por semana',
+  'Una vez por semana',
+  'Cada 15 días',
+  'Una vez al mes',
+];
 
 // Comprime la imagen antes de guardarla, para no llenar el almacenamiento del teléfono
 function comprimirImagen(dataUrl, maxAncho = 800, calidad = 0.75) {
@@ -24,6 +54,8 @@ async function guardarProducto(datos) {
     nombre: datos.nombre.trim(),
     categoria: datos.categoria,
     descripcion: datos.descripcion.trim(),
+    tipoSol: datos.tipoSol || '',
+    riego: datos.riego || '',
     costo: parseFloat(datos.costo) || 0,
     precio: parseFloat(datos.precio) || 0,
     stock: parseInt(datos.stock, 10) || 0,
@@ -73,6 +105,8 @@ async function ajustarStock(id, cambio) {
 
 window.Inventario = {
   CATEGORIAS,
+  TIPOS_SOL,
+  TIPOS_RIEGO,
   comprimirImagen,
   guardarProducto,
   listarProductos,
