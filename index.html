@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#3f6b3f">
+<title>Encantos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>🌿 Encantos</h1>
+  <button class="icon-btn" id="btnMenu" title="Más opciones">⋮</button>
+</header>
+
+<main>
+
+  <!-- ================= INVENTARIO ================= -->
+  <section id="vista-inventario" class="vista activa">
+    <div class="buscador">
+      <input type="text" id="buscarTexto" placeholder="Buscar por nombre...">
+      <button id="btnBuscarFoto" title="Buscar con una foto">📷</button>
+    </div>
+    <div id="listaProductos"><div class="cargando">Cargando inventario...</div></div>
+  </section>
+
+  <!-- ================= VENTAS ================= -->
+  <section id="vista-ventas" class="vista">
+    <div class="resumen-grid">
+      <div class="card">
+        <div>
+          <div class="valor" id="resumenTotalHoy">L. 0</div>
+          <div class="etiqueta">Vendido hoy</div>
+        </div>
+      </div>
+      <div class="card">
+        <div>
+          <div class="valor" id="resumenGananciaHoy">L. 0</div>
+          <div class="etiqueta">Ganancia hoy</div>
+        </div>
+      </div>
+    </div>
+    <div id="listaVentas"><div class="cargando">Cargando ventas...</div></div>
+  </section>
+
+  <!-- ================= CLIENTES ================= -->
+  <section id="vista-clientes" class="vista">
+    <div class="buscador">
+      <input type="text" id="buscarCliente" placeholder="Buscar cliente...">
+    </div>
+    <div id="listaClientes"><div class="cargando">Cargando clientes...</div></div>
+  </section>
+
+  <!-- ================= REPORTES ================= -->
+  <section id="vista-reportes" class="vista">
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Generar reporte PDF</h3>
+      <label>Desde</label>
+      <input type="date" id="reporteDesde">
+      <label>Hasta</label>
+      <input type="date" id="reporteHasta">
+      <div class="fila-botones">
+        <button class="btn" id="btnGenerarReporte">📄 Descargar PDF</button>
+      </div>
+    </div>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Respaldo de datos</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">Guarda una copia de todo tu inventario, clientes y ventas, o restaura un respaldo anterior.</p>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnExportar">⬇️ Exportar respaldo</button>
+      </div>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnImportar">⬆️ Importar respaldo</button>
+        <input type="file" id="inputImportar" accept="application/json" style="display:none;">
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<button class="fab" id="btnAgregar" title="Agregar">+</button>
+
+<nav class="tabbar">
+  <button class="tab activo" data-vista="inventario"><span class="emoji">🌱</span>Inventario</button>
+  <button class="tab" data-vista="ventas"><span class="emoji">💰</span>Ventas</button>
+  <button class="tab" data-vista="clientes"><span class="emoji">👤</span>Clientes</button>
+  <button class="tab" data-vista="reportes"><span class="emoji">📊</span>Reportes</button>
+</nav>
+
+<!-- ============ MODAL: Producto ============ -->
+<div class="modal-overlay" id="modalProducto">
+  <div class="modal">
+    <h2 id="tituloModalProducto">Nuevo producto</h2>
+    <img id="previewFotoProducto" class="preview-foto" style="display:none;">
+    <input type="file" id="inputCamaraProducto" accept="image/*" capture="environment" style="display:none;">
+    <input type="file" id="inputGaleriaProducto" accept="image/*" style="display:none;">
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnTomarFoto">📷 Tomar foto</button>
+      <button class="btn secundario" id="btnElegirGaleria">🖼️ Elegir de galería</button>
+    </div>
+
+    <label>Categoría</label>
+    <select id="campoCategoria"></select>
+
+    <label>Nombre</label>
+    <input type="text" id="campoNombre" placeholder="Ej: Rosa roja, Piedra pómez 1kg...">
+
+    <label>Descripción</label>
+    <textarea id="campoDescripcion" placeholder="Detalles de la planta o producto..."></textarea>
+
+    <label>Costo (L.)</label>
+    <input type="number" id="campoCosto" step="0.01" min="0" placeholder="0.00">
+
+    <label>Precio de venta (L.)</label>
+    <input type="number" id="campoPrecio" step="0.01" min="0" placeholder="0.00">
+
+    <label>Cantidad en stock</label>
+    <input type="number" id="campoStock" min="0" placeholder="0">
+
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarProducto">Cancelar</button>
+      <button class="btn" id="btnGuardarProducto">Guardar</button>
+    </div>
+    <div class="fila-botones" id="filaEliminarProducto" style="display:none;">
+      <button class="btn peligro" id="btnEliminarProducto">Eliminar producto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Búsqueda visual ============ -->
+<div class="modal-overlay" id="modalBusquedaVisual">
+  <div class="modal">
+    <h2>Buscar por foto</h2>
+    <img id="previewFotoBusqueda" class="preview-foto" style="display:none;">
+    <input type="file" id="inputCamaraBusqueda" accept="image/*" capture="environment" style="display:none;">
+    <input type="file" id="inputGaleriaBusqueda" accept="image/*" style="display:none;">
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnTomarFotoBusqueda">📷 Tomar foto</button>
+      <button class="btn secundario" id="btnElegirGaleriaBusqueda">🖼️ Elegir de galería</button>
+    </div>
+    <div id="resultadosBusquedaVisual"></div>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCerrarBusquedaVisual">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Venta ============ -->
+<div class="modal-overlay" id="modalVenta">
+  <div class="modal">
+    <h2>Registrar venta</h2>
+    <p id="ventaProductoNombre" style="font-weight:600;"></p>
+    <label>Cliente (opcional)</label>
+    <select id="campoClienteVenta">
+      <option value="">Cliente general</option>
+    </select>
+    <label>Cantidad</label>
+    <input type="number" id="campoCantidadVenta" min="1" value="1">
+    <label>Precio de venta unitario (L.)</label>
+    <input type="number" id="campoPrecioVenta" step="0.01" min="0">
+    <p style="font-size:13px;color:#666;">Ganancia estimada: <b id="gananciaEstimada">L. 0.00</b></p>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarVenta">Cancelar</button>
+      <button class="btn" id="btnConfirmarVenta">Confirmar venta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Cliente ============ -->
+<div class="modal-overlay" id="modalCliente">
+  <div class="modal">
+    <h2 id="tituloModalCliente">Nuevo cliente</h2>
+    <label>Nombre</label>
+    <input type="text" id="campoNombreCliente" placeholder="Nombre del cliente">
+    <label>Celular</label>
+    <input type="tel" id="campoCelularCliente" placeholder="9999-9999">
+    <label>Notas (opcional)</label>
+    <textarea id="campoNotasCliente"></textarea>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarCliente">Cancelar</button>
+      <button class="btn" id="btnGuardarCliente">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Historial cliente ============ -->
+<div class="modal-overlay" id="modalHistorialCliente">
+  <div class="modal">
+    <h2 id="tituloHistorialCliente">Historial de compras</h2>
+    <div id="listaHistorialCliente"></div>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCerrarHistorial">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/db.js"></script>
+<script src="js/inventario.js"></script>
+<script src="js/busqueda-visual.js"></script>
+<script src="js/clientes.js"></script>
+<script src="js/ventas.js"></script>
+<script src="js/reportes.js"></script>
+<script src="js/backup.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
