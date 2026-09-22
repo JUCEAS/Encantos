@@ -1,5 +1,5 @@
 // Service Worker de Encantos — habilita el uso 100% sin internet
-const CACHE_NAME = 'encantos-cache-v1';
+const CACHE_NAME = 'encantos-cache-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -13,7 +13,7 @@ const ASSETS = [
   './js/reportes.js',
   './js/backup.js',
   './js/busqueda-visual.js',
-  './js/vendor/jspdf.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
