@@ -24,6 +24,8 @@ const CATEGORIAS = [
 
 const TIPOS_SOL = ['Sol completo', 'Medio sol', 'Sombra'];
 
+const ORIGENES = ['Reproducción propia', 'Compra a proveedor'];
+
 const TIPOS_RIEGO = [
   'Diario / abundante',
   '2 a 3 veces por semana',
@@ -56,6 +58,8 @@ async function guardarProducto(datos) {
     descripcion: datos.descripcion.trim(),
     tipoSol: datos.tipoSol || '',
     riego: datos.riego || '',
+    origen: datos.origen || '',
+    proveedorId: datos.origen === 'Compra a proveedor' ? (datos.proveedorId || null) : null,
     costo: parseFloat(datos.costo) || 0,
     precio: parseFloat(datos.precio) || 0,
     stock: parseInt(datos.stock, 10) || 0,
@@ -105,6 +109,7 @@ window.Inventario = {
   CATEGORIAS,
   TIPOS_SOL,
   TIPOS_RIEGO,
+  ORIGENES,
   comprimirImagen,
   guardarProducto,
   listarProductos,

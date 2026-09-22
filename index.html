@@ -54,6 +54,14 @@
     <div id="listaClientes"><div class="cargando">Cargando clientes...</div></div>
   </section>
 
+  <!-- ================= PROVEEDORES ================= -->
+  <section id="vista-proveedores" class="vista">
+    <div class="buscador">
+      <input type="text" id="buscarProveedor" placeholder="Buscar proveedor...">
+    </div>
+    <div id="listaProveedores"><div class="cargando">Cargando proveedores...</div></div>
+  </section>
+
   <!-- ================= REPORTES ================= -->
   <section id="vista-reportes" class="vista">
     <div class="card" style="flex-direction:column;">
@@ -77,6 +85,16 @@
       </div>
       <div class="fila-botones">
         <button class="btn secundario" id="btnCompartirReporteClientes">📤 Compartir por WhatsApp</button>
+      </div>
+    </div>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Lista de proveedores</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">Nombre, empresa, celular y dirección de todos tus proveedores.</p>
+      <div class="fila-botones">
+        <button class="btn" id="btnGenerarReporteProveedores">📄 Descargar PDF</button>
+      </div>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnCompartirReporteProveedores">📤 Compartir por WhatsApp</button>
       </div>
     </div>
     <div class="card" style="flex-direction:column;">
@@ -110,6 +128,7 @@
   <button class="tab activo" data-vista="inventario"><span class="emoji">🌱</span>Inventario</button>
   <button class="tab" data-vista="ventas"><span class="emoji">💰</span>Ventas</button>
   <button class="tab" data-vista="clientes"><span class="emoji">👤</span>Clientes</button>
+  <button class="tab" data-vista="proveedores"><span class="emoji">🚚</span>Proveedores</button>
   <button class="tab" data-vista="reportes"><span class="emoji">📊</span>Reportes</button>
 </nav>
 
@@ -143,6 +162,20 @@
     <select id="campoRiego">
       <option value="">No aplica</option>
     </select>
+
+    <label>Origen</label>
+    <select id="campoOrigen">
+      <option value="Reproducción propia">Reproducción propia</option>
+      <option value="Compra a proveedor">Compra a proveedor</option>
+    </select>
+
+    <div id="filaProveedorProducto" style="display:none;">
+      <label>Proveedor</label>
+      <select id="campoProveedorProducto">
+        <option value="">Selecciona un proveedor...</option>
+      </select>
+      <p style="font-size:12px;color:#666;margin:4px 0 0;">¿No está en la lista? Agrégalo primero en la pestaña "Proveedores".</p>
+    </div>
 
     <label>Costo (L.)</label>
     <input type="number" id="campoCosto" step="0.01" min="0" placeholder="0.00">
@@ -219,6 +252,28 @@
   </div>
 </div>
 
+<!-- ============ MODAL: Proveedor ============ -->
+<div class="modal-overlay" id="modalProveedor">
+  <div class="modal">
+    <h2 id="tituloModalProveedor">Nuevo proveedor</h2>
+    <label>Nombre de la persona de contacto</label>
+    <input type="text" id="campoNombreProveedor" placeholder="Nombre del proveedor">
+    <label>Empresa (opcional)</label>
+    <input type="text" id="campoEmpresaProveedor" placeholder="Nombre de la empresa">
+    <label>Celular</label>
+    <input type="tel" id="campoTelefonoProveedor" placeholder="9999-9999">
+    <label>Dirección</label>
+    <textarea id="campoDireccionProveedor" placeholder="Dirección del proveedor"></textarea>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarProveedor">Cancelar</button>
+      <button class="btn" id="btnGuardarProveedor">Guardar</button>
+    </div>
+    <div class="fila-botones" id="filaEliminarProveedor" style="display:none;">
+      <button class="btn peligro" id="btnEliminarProveedor">Eliminar proveedor</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL: Historial cliente ============ -->
 <div class="modal-overlay" id="modalHistorialCliente">
   <div class="modal">
@@ -238,6 +293,7 @@
 <script src="js/inventario.js"></script>
 <script src="js/busqueda-visual.js"></script>
 <script src="js/clientes.js"></script>
+<script src="js/proveedores.js"></script>
 <script src="js/ventas.js"></script>
 <script src="js/reportes.js"></script>
 <script src="js/backup.js"></script>

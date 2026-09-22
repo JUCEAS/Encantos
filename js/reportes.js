@@ -134,6 +134,41 @@ async function construirPDFClientes() {
 }
 
 // ---------------------------------------------------------
+// Reporte de PROVEEDORES
+// ---------------------------------------------------------
+async function construirPDFProveedores() {
+  const doc = nuevoDocPDF('Lista de Proveedores');
+  const margenIzq = 14;
+  let y = 32;
+
+  const proveedores = await Proveedores.listarProveedores();
+
+  doc.setFontSize(10);
+  doc.text(`Total de proveedores registrados: ${proveedores.length}`, margenIzq, y);
+  y += 10;
+
+  proveedores.forEach((p) => {
+    if (y > 265) { doc.addPage(); y = 18; }
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(p.nombre || '', margenIzq, y);
+    doc.setFont(undefined, 'normal');
+    y += 5;
+    doc.setFontSize(9);
+    if (p.empresa) { doc.text('Empresa: ' + p.empresa, margenIzq + 2, y); y += 5; }
+    doc.text('Celular: ' + (p.telefono || '-'), margenIzq + 2, y); y += 5;
+    if (p.direccion) { doc.text('Dirección: ' + p.direccion.substring(0, 80), margenIzq + 2, y); y += 5; }
+    if (p.creadoEl) { doc.text('Proveedor desde: ' + new Date(p.creadoEl).toLocaleDateString(), margenIzq + 2, y); y += 5; }
+    y += 3;
+    doc.line(margenIzq, y, 196, y);
+    y += 6;
+  });
+
+  const nombreArchivo = `encantos-proveedores-${new Date().toISOString().slice(0, 10)}.pdf`;
+  return { doc, nombreArchivo };
+}
+
+// ---------------------------------------------------------
 // Reporte de INVENTARIO
 // ---------------------------------------------------------
 async function construirPDFInventario() {
@@ -260,6 +295,9 @@ async function compartirReporteClientesPDF() { return compartirPDF(construirPDFC
 async function generarReporteInventarioPDF() { return descargarPDF(construirPDFInventario); }
 async function compartirReporteInventarioPDF() { return compartirPDF(construirPDFInventario); }
 
+async function generarReporteProveedoresPDF() { return descargarPDF(construirPDFProveedores); }
+async function compartirReporteProveedoresPDF() { return compartirPDF(construirPDFProveedores); }
+
 window.Reportes = {
   generarReporteVentasPDF,
   compartirReporteVentasPDF,
@@ -267,4 +305,6 @@ window.Reportes = {
   compartirReporteClientesPDF,
   generarReporteInventarioPDF,
   compartirReporteInventarioPDF,
+  generarReporteProveedoresPDF,
+  compartirReporteProveedoresPDF,
 };

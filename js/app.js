@@ -6,6 +6,8 @@ let embeddingTemporal = null;
 let ventaProductoActual = null;
 let clienteEditandoId = null;
 let clienteEditandoCreadoEl = null;
+let proveedorEditandoId = null;
+let proveedorEditandoCreadoEl = null;
 
 // ---------- Navegación entre pestañas ----------
 document.querySelectorAll('.tabbar .tab').forEach((btn) => {
@@ -17,11 +19,12 @@ function cambiarVista(nombre) {
   document.getElementById('vista-' + nombre).classList.add('activa');
   document.querySelectorAll('.tabbar .tab').forEach((b) => b.classList.toggle('activo', b.dataset.vista === nombre));
 
-  document.getElementById('btnAgregar').style.display = (nombre === 'inventario' || nombre === 'clientes') ? 'block' : 'none';
+  document.getElementById('btnAgregar').style.display = (nombre === 'inventario' || nombre === 'clientes' || nombre === 'proveedores') ? 'block' : 'none';
 
   if (nombre === 'inventario') refrescarInventario();
   if (nombre === 'ventas') refrescarVentas();
   if (nombre === 'clientes') refrescarClientes();
+  if (nombre === 'proveedores') refrescarProveedores();
 }
 
 // ---------- Botón flotante "+" según la pestaña activa ----------
@@ -29,6 +32,7 @@ document.getElementById('btnAgregar').addEventListener('click', () => {
   const vistaActiva = document.querySelector('.vista.activa').id;
   if (vistaActiva === 'vista-inventario') abrirModalProducto();
   if (vistaActiva === 'vista-clientes') abrirModalCliente();
+  if (vistaActiva === 'vista-proveedores') abrirModalProveedor();
 });
 
 function mostrarModal(id) { document.getElementById(id).classList.add('activo'); }
@@ -47,7 +51,18 @@ async function refrescarInventario(filtro = '') {
     return;
   }
 
-  contenedor.innerHTML = productos.map((p) => `
+  const proveedores = await Proveedores.listarProveedores();
+  const mapaProveedores = new Map(proveedores.map((pr) => [pr.id, pr]));
+
+  contenedor.innerHTML = productos.map((p) => {
+    let lineaOrigen = '';
+    if (p.origen === 'Compra a proveedor') {
+      const prov = mapaProveedores.get(p.proveedorId);
+      lineaOrigen = `🚚 Proveedor: ${prov ? escaparHtml(prov.nombre) : 'no especificado'}`;
+    } else if (p.origen === 'Reproducción propia') {
+      lineaOrigen = '🌱 Reproducción propia';
+    }
+    return `
     <div class="card" data-id="${p.id}">
       <img class="foto-producto" src="${p.foto || ''}" onerror="this.style.opacity=0">
       <div class="info">
@@ -55,10 +70,12 @@ async function refrescarInventario(filtro = '') {
         <h3>${escaparHtml(p.nombre)}</h3>
         <p>${escaparHtml(p.descripcion || '')}</p>
         ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? '☀️ ' + p.tipoSol : '', p.riego ? '💧 ' + p.riego : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
+        ${lineaOrigen ? `<p style="font-size:12px;color:#888;">${lineaOrigen}</p>` : ''}
         <p class="precio">L. ${p.precio.toFixed(2)} &middot; <span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span></p>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   contenedor.querySelectorAll('.card').forEach((card) => {
     card.addEventListener('click', () => mostrarOpcionesProducto(card.dataset.id));
@@ -86,7 +103,7 @@ async function mostrarOpcionesProducto(id) {
 
 document.getElementById('buscarTexto').addEventListener('input', (e) => refrescarInventario(e.target.value));
 
-function abrirModalProducto(producto = null) {
+async function abrirModalProducto(producto = null) {
   productoEditandoId = producto ? producto.id : null;
   fotoTemporalDataUrl = producto ? producto.foto : null;
   embeddingTemporal = producto ? producto.embedding : null;
@@ -109,6 +126,12 @@ function abrirModalProducto(producto = null) {
   document.getElementById('campoDescripcion').value = producto?.descripcion || '';
   selectSol.value = producto?.tipoSol || '';
   selectRiego.value = producto?.riego || '';
+
+  await refrescarSelectProveedorProducto(producto?.proveedorId || '');
+  const selectOrigen = document.getElementById('campoOrigen');
+  selectOrigen.value = producto?.origen || Inventario.ORIGENES[0];
+  actualizarVisibilidadProveedorProducto();
+
   document.getElementById('campoCosto').value = producto?.costo ?? '';
   document.getElementById('campoPrecio').value = producto?.precio ?? '';
   document.getElementById('campoStock').value = producto?.stock ?? '';
@@ -125,6 +148,21 @@ function abrirModalProducto(producto = null) {
 
   mostrarModal('modalProducto');
 }
+
+async function refrescarSelectProveedorProducto(proveedorIdSeleccionado = '') {
+  const proveedores = await Proveedores.listarProveedores();
+  const select = document.getElementById('campoProveedorProducto');
+  select.innerHTML = '<option value="">Selecciona un proveedor...</option>' +
+    proveedores.map((pr) => `<option value="${pr.id}">${escaparHtml(pr.nombre)}${pr.empresa ? ' - ' + escaparHtml(pr.empresa) : ''}</option>`).join('');
+  select.value = proveedorIdSeleccionado || '';
+}
+
+function actualizarVisibilidadProveedorProducto() {
+  const esCompra = document.getElementById('campoOrigen').value === 'Compra a proveedor';
+  document.getElementById('filaProveedorProducto').style.display = esCompra ? 'block' : 'none';
+}
+
+document.getElementById('campoOrigen').addEventListener('change', actualizarVisibilidadProveedorProducto);
 
 document.getElementById('btnCancelarProducto').addEventListener('click', () => ocultarModal('modalProducto'));
 
@@ -174,6 +212,10 @@ document.getElementById('btnGuardarProducto').addEventListener('click', async ()
   const nombre = document.getElementById('campoNombre').value.trim();
   if (!nombre) { alert('Ingresa un nombre para el producto.'); return; }
 
+  if (document.getElementById('campoOrigen').value === 'Compra a proveedor' && !document.getElementById('campoProveedorProducto').value) {
+    if (!confirm('No seleccionaste un proveedor. ¿Guardar de todas formas?')) return;
+  }
+
   await Inventario.guardarProducto({
     id: productoEditandoId,
     nombre,
@@ -181,6 +223,8 @@ document.getElementById('btnGuardarProducto').addEventListener('click', async ()
     descripcion: document.getElementById('campoDescripcion').value,
     tipoSol: document.getElementById('campoTipoSol').value,
     riego: document.getElementById('campoRiego').value,
+    origen: document.getElementById('campoOrigen').value,
+    proveedorId: document.getElementById('campoProveedorProducto').value || null,
     costo: document.getElementById('campoCosto').value,
     precio: document.getElementById('campoPrecio').value,
     stock: document.getElementById('campoStock').value,
@@ -428,6 +472,83 @@ async function abrirHistorialCliente(cliente) {
 document.getElementById('btnCerrarHistorial').addEventListener('click', () => ocultarModal('modalHistorialCliente'));
 
 // =========================================================
+// PROVEEDORES
+// =========================================================
+
+async function refrescarProveedores(filtro = '') {
+  const contenedor = document.getElementById('listaProveedores');
+  const proveedores = filtro ? await Proveedores.buscarProveedores(filtro) : await Proveedores.listarProveedores();
+
+  if (proveedores.length === 0) {
+    contenedor.innerHTML = '<div class="vacio">Aún no hay proveedores. Toca "+" para agregar el primero.</div>';
+    return;
+  }
+
+  contenedor.innerHTML = proveedores.map((p) => `
+    <div class="card" data-id="${p.id}">
+      <div class="info">
+        <h3>${escaparHtml(p.nombre)}</h3>
+        ${p.empresa ? `<p>${escaparHtml(p.empresa)}</p>` : ''}
+        <p>${escaparHtml(p.telefono || 'Sin celular')}</p>
+        ${p.direccion ? `<p style="font-size:12px;color:#888;">${escaparHtml(p.direccion)}</p>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  contenedor.querySelectorAll('.card').forEach((card) => {
+    card.addEventListener('click', () => mostrarOpcionesProveedor(card.dataset.id));
+  });
+}
+
+document.getElementById('buscarProveedor').addEventListener('input', (e) => refrescarProveedores(e.target.value));
+
+async function mostrarOpcionesProveedor(id) {
+  const proveedores = await Proveedores.listarProveedores();
+  const proveedor = proveedores.find((p) => p.id === id);
+  if (!proveedor) return;
+  abrirModalProveedor(proveedor);
+}
+
+function abrirModalProveedor(proveedor = null) {
+  proveedorEditandoId = proveedor ? proveedor.id : null;
+  proveedorEditandoCreadoEl = proveedor ? proveedor.creadoEl : null;
+  document.getElementById('tituloModalProveedor').textContent = proveedor ? 'Editar proveedor' : 'Nuevo proveedor';
+  document.getElementById('campoNombreProveedor').value = proveedor?.nombre || '';
+  document.getElementById('campoEmpresaProveedor').value = proveedor?.empresa || '';
+  document.getElementById('campoTelefonoProveedor').value = proveedor?.telefono || '';
+  document.getElementById('campoDireccionProveedor').value = proveedor?.direccion || '';
+  document.getElementById('filaEliminarProveedor').style.display = proveedor ? 'flex' : 'none';
+  mostrarModal('modalProveedor');
+}
+
+document.getElementById('btnCancelarProveedor').addEventListener('click', () => ocultarModal('modalProveedor'));
+
+document.getElementById('btnGuardarProveedor').addEventListener('click', async () => {
+  const nombre = document.getElementById('campoNombreProveedor').value.trim();
+  if (!nombre) { alert('Ingresa el nombre del proveedor.'); return; }
+
+  await Proveedores.guardarProveedor({
+    id: proveedorEditandoId,
+    creadoEl: proveedorEditandoCreadoEl,
+    nombre,
+    empresa: document.getElementById('campoEmpresaProveedor').value,
+    telefono: document.getElementById('campoTelefonoProveedor').value,
+    direccion: document.getElementById('campoDireccionProveedor').value,
+  });
+
+  ocultarModal('modalProveedor');
+  refrescarProveedores();
+});
+
+document.getElementById('btnEliminarProveedor').addEventListener('click', async () => {
+  if (!proveedorEditandoId) return;
+  if (!confirm('¿Eliminar este proveedor? Los productos que lo tengan asignado conservarán el historial, pero ya no podrás seleccionarlo para productos nuevos.')) return;
+  await Proveedores.eliminarProveedor(proveedorEditandoId);
+  ocultarModal('modalProveedor');
+  refrescarProveedores();
+});
+
+// =========================================================
 // REPORTES Y RESPALDO
 // =========================================================
 
@@ -473,6 +594,15 @@ document.getElementById('btnCompartirReporteInventario').addEventListener('click
   }
 });
 
+document.getElementById('btnGenerarReporteProveedores').addEventListener('click', () => Reportes.generarReporteProveedoresPDF());
+document.getElementById('btnCompartirReporteProveedores').addEventListener('click', async () => {
+  try {
+    await Reportes.compartirReporteProveedoresPDF();
+  } catch (err) {
+    manejarErrorCompartir(err);
+  }
+});
+
 document.getElementById('btnExportar').addEventListener('click', () => Backup.exportarRespaldo());
 
 document.getElementById('btnImportar').addEventListener('click', () => document.getElementById('inputImportar').click());
@@ -487,6 +617,7 @@ document.getElementById('inputImportar').addEventListener('change', async (e) =>
     refrescarInventario();
     refrescarVentas();
     refrescarClientes();
+    refrescarProveedores();
   } catch (err) {
     alert('No se pudo importar el respaldo: ' + err.message);
   }
@@ -509,3 +640,4 @@ refrescarInventario();
 DB.escucharCambios(DB.STORES.productos, () => refrescarInventario(document.getElementById('buscarTexto').value));
 DB.escucharCambios(DB.STORES.clientes, () => refrescarClientes(document.getElementById('buscarCliente').value));
 DB.escucharCambios(DB.STORES.ventas, () => refrescarVentas());
+DB.escucharCambios(DB.STORES.proveedores, () => refrescarProveedores(document.getElementById('buscarProveedor').value));

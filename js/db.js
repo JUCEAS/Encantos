@@ -26,6 +26,7 @@ const STORES = {
   productos: 'productos',
   clientes: 'clientes',
   ventas: 'ventas',
+  proveedores: 'proveedores',
 };
 
 // Sesión anónima: identifica el dispositivo sin pedir usuario ni contraseña.
@@ -94,17 +95,19 @@ function escucharCambios(nombreTienda, callback) {
 
 // Exportar toda la base de datos como un objeto plano (para respaldo)
 async function exportarTodo() {
-  const [productos, clientes, ventas] = await Promise.all([
+  const [productos, clientes, ventas, proveedores] = await Promise.all([
     obtenerTodos(STORES.productos),
     obtenerTodos(STORES.clientes),
     obtenerTodos(STORES.ventas),
+    obtenerTodos(STORES.proveedores),
   ]);
   return {
-    version: 2,
+    version: 3,
     exportadoEl: new Date().toISOString(),
     productos,
     clientes,
     ventas,
+    proveedores,
   };
 }
 
@@ -133,6 +136,7 @@ async function importarTodo(data) {
     limpiarColeccion(STORES.productos),
     limpiarColeccion(STORES.clientes),
     limpiarColeccion(STORES.ventas),
+    limpiarColeccion(STORES.proveedores),
   ]);
 
   const escrituras = [];
@@ -154,6 +158,7 @@ async function importarTodo(data) {
   (data.productos || []).forEach((p) => agregarAlLote(STORES.productos, p));
   (data.clientes || []).forEach((c) => agregarAlLote(STORES.clientes, c));
   (data.ventas || []).forEach((v) => agregarAlLote(STORES.ventas, v));
+  (data.proveedores || []).forEach((pr) => agregarAlLote(STORES.proveedores, pr));
 
   if (contador > 0) escrituras.push(batch.commit());
   await Promise.all(escrituras);
