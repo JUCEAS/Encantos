@@ -72,7 +72,7 @@ async function refrescarInventario(filtro = '') {
       lineaOrigen = '🌱 Reproducción propia';
     }
     return `
-    <div class="card" data-id="${p.id}">
+    <div class="card${p.stock <= 0 ? ' sin-stock' : ''}" data-id="${p.id}">
       <img class="foto-producto" src="${p.foto || ''}" onerror="this.style.opacity=0">
       <div class="info">
         <span class="chip">${Inventario.infoCategoria(p.categoria).emoji} ${escaparHtml(p.categoria)}</span>
@@ -81,7 +81,7 @@ async function refrescarInventario(filtro = '') {
         <p>${escaparHtml(p.descripcion || '')}</p>
         ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? ({ 'Sol completo': '☀️ ', 'Medio sol': '⛅ ', 'Sombra': '🌥️ ' }[p.tipoSol] || '☀️ ') + p.tipoSol : '', p.riego ? '💧 ' + p.riego : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
         ${lineaOrigen ? `<p style="font-size:12px;color:#888;">${lineaOrigen}</p>` : ''}
-        <p class="precio">L. ${p.precio.toFixed(2)} &middot; <span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span></p>
+        <p class="precio">L. ${p.precio.toFixed(2)} &middot; ${p.stock <= 0 ? '<span class="agotado">⛔ Agotado</span>' : `<span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span>`}</p>
       </div>
     </div>
   `;
@@ -102,6 +102,13 @@ async function mostrarOpcionesProducto(id) {
   const productos = await Inventario.listarProductos();
   const producto = productos.find((p) => p.id === id);
   if (!producto) return;
+
+  if ((Number(producto.stock) || 0) <= 0) {
+    // Sin existencias: no se ofrece vender
+    const editar = confirm(`⛔ No se puede vender "${producto.nombre}"\n\nNo hay existencias: el stock es 0.\nSi recibiste más, actualiza la cantidad en stock.\n\nAceptar = Editar el producto\nCancelar = Cerrar`);
+    if (editar) abrirModalProducto(producto);
+    return;
+  }
 
   const accion = confirm(`${producto.nombre}\n\nAceptar = Vender\nCancelar = Editar / Eliminar`);
   if (accion) {
@@ -397,9 +404,15 @@ document.getElementById('inputGaleriaBusqueda').addEventListener('change', manej
 // =========================================================
 
 async function abrirModalVenta(producto) {
+  if ((Number(producto.stock) || 0) <= 0) {
+    alert(`⛔ No se puede vender "${producto.nombre}": no hay existencias (stock 0).`);
+    return;
+  }
   ventaProductoActual = producto;
   document.getElementById('ventaProductoNombre').textContent = `${producto.nombre} (stock: ${producto.stock})`;
   document.getElementById('campoCantidadVenta').value = 1;
+  document.getElementById('campoCantidadVenta').min = 1;
+  document.getElementById('campoCantidadVenta').step = 1;
   document.getElementById('campoCantidadVenta').max = producto.stock;
   document.getElementById('campoPrecioVenta').value = producto.precio.toFixed(2);
 

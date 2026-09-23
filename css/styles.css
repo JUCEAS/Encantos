@@ -244,3 +244,7 @@ textarea { resize: vertical; min-height: 60px; }
 .aviso-catalogo:empty { display: none; }
 .filtro-categoria { margin: -2px 0 12px; }
 .chip.catalogo { background: #e6efe2; color: var(--verde); }
+
+/* ---------- Productos sin existencias ---------- */
+.card.sin-stock { opacity: 0.6; }
+.card .agotado { color: var(--rojo); font-weight: 700; }

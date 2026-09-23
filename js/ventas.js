@@ -5,9 +5,18 @@ async function registrarVenta(datos) {
   const producto = await DB.obtener(DB.STORES.productos, datos.productoId);
   if (!producto) throw new Error('Producto no encontrado');
 
-  const cantidad = parseInt(datos.cantidad, 10) || 1;
-  if (cantidad > (producto.stock || 0)) {
-    throw new Error(`Stock insuficiente. Disponible: ${producto.stock}`);
+  const stock = Number(producto.stock) || 0;
+  if (stock <= 0) {
+    throw new Error(`No se puede vender "${producto.nombre}": no hay existencias (stock 0).`);
+  }
+
+  const cantidadTexto = String(datos.cantidad ?? '').trim();
+  const cantidad = Number(cantidadTexto);
+  if (!Number.isInteger(cantidad) || cantidad < 1) {
+    throw new Error('La cantidad debe ser un número entero, mayor o igual a 1.');
+  }
+  if (cantidad > stock) {
+    throw new Error(`No hay suficientes existencias de "${producto.nombre}". Pediste ${cantidad} y solo hay ${stock}.`);
   }
 
   const precioVenta = parseFloat(datos.precioVenta);
