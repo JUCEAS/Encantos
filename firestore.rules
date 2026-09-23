@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Reglas de seguridad de Encantos Vivero
+// Copiar y pegar completo en: Firebase Console → Firestore Database → Reglas → Publicar
+//
+// - Inventario, clientes, ventas y proveedores: SOLO las cuentas de Google autorizadas.
+// - catalogo_publico (Fase 3): cualquiera puede VER, solo el equipo puede modificar.
+// - Todo lo demás: cerrado.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Misma lista que CORREOS_AUTORIZADOS en js/db.js
+    function esEquipo() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'juceas19@gmail.com'
+          // Para agregar a otra persona: , 'sucorreo@gmail.com'
+        ];
+    }
+
+    match /productos/{id}   { allow read, write: if esEquipo(); }
+    match /clientes/{id}    { allow read, write: if esEquipo(); }
+    match /ventas/{id}      { allow read, write: if esEquipo(); }
+    match /proveedores/{id} { allow read, write: if esEquipo(); }
+
+    // Catálogo público (se usará en la Fase 3): solo datos pensados para el cliente,
+    // nunca costos, ganancias ni datos de clientes.
+    match /catalogo_publico/{id} {
+      allow read: if true;
+      allow write: if esEquipo();
+    }
+
+    // Cualquier otra colección queda bloqueada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

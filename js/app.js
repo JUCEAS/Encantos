@@ -659,7 +659,45 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-refrescarInventario();
+// ---------- Acceso con Google ----------
+const pantallaAcceso = document.getElementById('pantallaAcceso');
+const mensajeAcceso = document.getElementById('mensajeAcceso');
+const btnEntrarGoogle = document.getElementById('btnEntrarGoogle');
+const btnSesion = document.getElementById('btnSesion');
+
+DB.alCambiarSesion((user, estado, correo) => {
+  if (user) {
+    pantallaAcceso.classList.add('oculta');
+    btnSesion.style.display = 'block';
+    btnSesion.textContent = (user.displayName || user.email).split(' ')[0] + ' · Salir';
+    return;
+  }
+  pantallaAcceso.classList.remove('oculta');
+  btnSesion.style.display = 'none';
+  btnEntrarGoogle.style.display = 'block';
+  mensajeAcceso.textContent = estado === 'no-autorizado'
+    ? 'La cuenta ' + correo + ' no tiene permiso para usar Encantos. Entra con una cuenta autorizada.'
+    : 'Inicia sesión con tu cuenta de Google autorizada para ver el inventario.';
+});
+
+btnEntrarGoogle.addEventListener('click', async () => {
+  if (!navigator.onLine) { alert('Para iniciar sesión la primera vez necesitas internet.'); return; }
+  btnEntrarGoogle.disabled = true;
+  mensajeAcceso.textContent = 'Abriendo Google...';
+  try {
+    await DB.iniciarSesionGoogle();
+  } catch (err) {
+    mensajeAcceso.textContent = 'No se pudo iniciar sesión (' + (err.code || err.message) + '). Intenta de nuevo.';
+  } finally {
+    btnEntrarGoogle.disabled = false;
+  }
+});
+
+btnSesion.addEventListener('click', () => {
+  if (confirm('¿Cerrar sesión en este celular? Necesitarás internet para volver a entrar.')) DB.cerrarSesion();
+});
+
+DB.authReady.then(() => refrescarInventario());
 
 // Sincronización en tiempo real: cuando el otro celular agrega, edita o vende
 // algo, esta pantalla se actualiza sola (y al revés).

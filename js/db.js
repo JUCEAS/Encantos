@@ -29,17 +29,59 @@ const STORES = {
   proveedores: 'proveedores',
 };
 
-// Sesión anónima: identifica el dispositivo sin pedir usuario ni contraseña.
-// Ambos celulares, al compartir la misma configuración de Firebase, leen y
-// escriben en la misma base de datos.
+// ---------- Acceso: solo cuentas de Google autorizadas ----------
+// Antes la app usaba una sesión anónima, que cualquier persona podía obtener.
+// Ahora cada celular inicia sesión con Google y solo estos correos pueden
+// entrar. La MISMA lista debe estar en las reglas de Firestore (firestore.rules),
+// que son las que realmente protegen los datos en la nube.
+const CORREOS_AUTORIZADOS = [
+  'juceas19@gmail.com',
+  // Para agregar a otra persona: 'sucorreo@gmail.com',  (y también en firestore.rules)
+];
+
+function esCorreoAutorizado(user) {
+  return !!(user && user.email && CORREOS_AUTORIZADOS.includes(user.email.toLowerCase()));
+}
+
+// La sesión queda guardada en el teléfono: después del primer inicio de sesión
+// la app abre directo, incluso sin internet.
+firebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+
 let authReadyResolve;
 const authReady = new Promise((resolve) => { authReadyResolve = resolve; });
-firebaseAuth.onAuthStateChanged((user) => {
+const oyentesSesion = [];
+
+firebaseAuth.onAuthStateChanged(async (user) => {
+  if (user && !esCorreoAutorizado(user)) {
+    // Cuenta de Google válida pero no autorizada (o sesión anónima antigua).
+    await firebaseAuth.signOut();
+    oyentesSesion.forEach((fn) => fn(null, 'no-autorizado', user.email || ''));
+    return;
+  }
   if (user) authReadyResolve(user);
+  oyentesSesion.forEach((fn) => fn(user, user ? 'ok' : 'sin-sesion'));
 });
-firebaseAuth.signInAnonymously().catch((err) => {
-  console.error('No se pudo iniciar sesión anónima en Firebase', err);
-});
+
+function alCambiarSesion(fn) { oyentesSesion.push(fn); }
+
+async function iniciarSesionGoogle() {
+  const proveedor = new firebase.auth.GoogleAuthProvider();
+  proveedor.setCustomParameters({ prompt: 'select_account' });
+  try {
+    await firebaseAuth.signInWithPopup(proveedor);
+  } catch (err) {
+    if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
+      await firebaseAuth.signInWithRedirect(proveedor);
+    } else {
+      throw err;
+    }
+  }
+}
+
+async function cerrarSesion() {
+  await firebaseAuth.signOut();
+  location.reload();
+}
 
 function coleccion(nombreTienda) {
   return firestoreDB.collection(nombreTienda);
@@ -87,14 +129,19 @@ async function obtenerTodos(nombreTienda) {
 // Se llama cuando cambia algo en una colección (propio o del otro celular) y
 // permite refrescar la pantalla automáticamente.
 function escucharCambios(nombreTienda, callback) {
-  return coleccion(nombreTienda).onSnapshot(
+  let cancelar = () => {};
+  authReady.then(() => {
+    cancelar = coleccion(nombreTienda).onSnapshot(
     (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-    (err) => console.warn('Error escuchando cambios de ' + nombreTienda, err)
-  );
+      (err) => console.warn('Error escuchando cambios de ' + nombreTienda, err)
+    );
+  });
+  return () => cancelar();
 }
 
 // Exportar toda la base de datos como un objeto plano (para respaldo)
 async function exportarTodo() {
+  await authReady;
   const [productos, clientes, ventas, proveedores] = await Promise.all([
     obtenerTodos(STORES.productos),
     obtenerTodos(STORES.clientes),
@@ -175,4 +222,8 @@ window.DB = {
   escucharCambios,
   exportarTodo,
   importarTodo,
+  authReady,
+  alCambiarSesion,
+  iniciarSesionGoogle,
+  cerrarSesion,
 };
