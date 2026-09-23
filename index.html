@@ -35,6 +35,10 @@
       <button id="btnBuscarFoto" title="Buscar con una foto">📷</button>
     </div>
     <select id="filtroCategoria" class="filtro-categoria"></select>
+    <div class="fila-catalogo">
+      <button class="btn chico" id="btnCompartirCatalogo">📤 Compartir catálogo</button>
+      <button class="btn chico secundario" id="btnDatosCatalogo">⚙️ Datos del catálogo</button>
+    </div>
     <div id="listaProductos"><div class="cargando">Cargando inventario...</div></div>
   </section>
 
@@ -247,6 +251,45 @@
     </div>
     <div class="fila-botones" id="filaEliminarProducto" style="display:none;">
       <button class="btn peligro" id="btnEliminarProducto">Eliminar producto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Compartir catálogo ============ -->
+<div class="modal-overlay" id="modalCompartir">
+  <div class="modal">
+    <h2>Compartir catálogo</h2>
+    <p class="nota-catalogo" style="margin-top:0">Envía el enlace de todo el catálogo o solo de una categoría. Tus clientes ven fotos, precios y cuidados, y te piden por WhatsApp.</p>
+    <p class="aviso-catalogo" id="avisoSinNumero"></p>
+    <div id="listaCompartir"><div class="cargando">Cargando...</div></div>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCerrarCompartir">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Datos del catálogo ============ -->
+<div class="modal-overlay" id="modalDatosCatalogo">
+  <div class="modal">
+    <h2>Datos del catálogo</h2>
+    <p class="nota-catalogo" style="margin-top:0">Esto lo ve cualquier persona que abra el catálogo.</p>
+
+    <label>Número de WhatsApp para pedidos</label>
+    <input type="tel" id="cfgWhatsapp" placeholder="Ej: 9876-5432" inputmode="tel">
+    <p class="nota-catalogo">Si es de Honduras, basta con los 8 dígitos. Si es de otro país, escríbelo con su código.</p>
+
+    <label>Nombre del negocio</label>
+    <input type="text" id="cfgNegocio" placeholder="Encantos">
+
+    <label>Mensaje de bienvenida (opcional)</label>
+    <textarea id="cfgBienvenida" placeholder="Ej: Plantas sanas y bonitas, listas para tu hogar. Hacemos entregas en la ciudad."></textarea>
+
+    <label>Ubicación u horario (opcional)</label>
+    <input type="text" id="cfgUbicacion" placeholder="Ej: Tegucigalpa · Entregas de lunes a sábado">
+
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarDatos">Cancelar</button>
+      <button class="btn" id="btnGuardarDatos">Guardar</button>
     </div>
   </div>
 </div>

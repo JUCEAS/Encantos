@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3f6b3f">
+<title>Catálogo de plantas · Encantos</title>
+<meta name="description" content="Plantas ornamentales con foto, precio y cuidados. Pide por WhatsApp.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Catálogo de plantas · Encantos 🌿">
+<meta property="og:description" content="Mira nuestras plantas con foto, precio y cuidados, y haz tu pedido por WhatsApp.">
+<meta property="og:image" content="https://juceas.github.io/Encantos/icons/icon-512.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/catalogo.css">
+</head>
+<body>
+
+<header class="portada">
+  <div class="marca">🌿 <span id="nombreNegocio">Encantos</span></div>
+  <h1 id="tituloSeccion">Catálogo de plantas</h1>
+  <p id="bienvenida">Elige tus plantas, mira sus cuidados y haz tu pedido por WhatsApp.</p>
+  <p id="ubicacion" class="ubicacion" hidden></p>
+</header>
+
+<div class="barra-filtros">
+  <input type="search" id="buscar" placeholder="Buscar planta..." autocomplete="off">
+  <div class="chips" id="chipsCategorias" aria-label="Categorías"></div>
+  <div class="chips chips-luz" id="chipsLuz" aria-label="Luz"></div>
+</div>
+
+<main>
+  <p class="estado" id="estado">Cargando plantas...</p>
+  <div class="rejilla" id="rejilla"></div>
+  <div class="compartir-seccion">
+    <button class="btn-borde" id="btnCompartir">📤 Compartir esta sección</button>
+  </div>
+</main>
+
+<footer class="pie">
+  Precios en Lempiras. La disponibilidad se confirma por WhatsApp.
+</footer>
+
+<!-- Ficha de la planta -->
+<div class="velo" id="velo" hidden></div>
+<section class="ficha" id="ficha" hidden role="dialog" aria-modal="true" aria-labelledby="fichaNombre">
+  <button class="cerrar" id="cerrarFicha" aria-label="Cerrar">✕</button>
+  <div id="fichaContenido"></div>
+</section>
+
+<!-- Pedido -->
+<div class="barra-pedido" id="barraPedido" hidden>
+  <button id="btnVerPedido" class="btn-pedido">
+    🧺 <span id="resumenPedido"></span>
+  </button>
+</div>
+<section class="ficha" id="panelPedido" hidden role="dialog" aria-modal="true" aria-label="Tu pedido">
+  <button class="cerrar" id="cerrarPedido" aria-label="Cerrar">✕</button>
+  <h2>Tu pedido</h2>
+  <div id="listaPedido"></div>
+  <p class="total-pedido" id="totalPedido"></p>
+  <button class="btn-whatsapp" id="btnEnviarPedido">Enviar pedido por WhatsApp</button>
+  <button class="btn-borde" id="btnVaciarPedido">Vaciar pedido</button>
+</section>
+
+<div class="aviso-flotante" id="avisoFlotante" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/catalogo-publico.js"></script>
+</body>
+</html>

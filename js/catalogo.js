@@ -6,6 +6,27 @@
 
 const UMBRAL_ULTIMAS_UNIDADES = 2;
 
+// Documento especial dentro de catalogo_publico con los datos del negocio que
+// ve el cliente (número de WhatsApp, mensaje de bienvenida, ubicación).
+// Los ids que empiezan con "_" no son plantas.
+const CONFIG_ID = '_config';
+
+async function obtenerConfig() {
+  return (await DB.obtener(DB.STORES.catalogo, CONFIG_ID)) || {};
+}
+
+async function guardarConfig(datos) {
+  return DB.actualizar(DB.STORES.catalogo, {
+    id: CONFIG_ID,
+    tipo: 'config',
+    negocio: (datos.negocio || 'Encantos').trim(),
+    whatsapp: (datos.whatsapp || '').replace(/[^0-9]/g, ''),
+    bienvenida: (datos.bienvenida || '').trim(),
+    ubicacion: (datos.ubicacion || '').trim(),
+    actualizadoEl: new Date().toISOString(),
+  });
+}
+
 function disponibilidadDe(stock) {
   const n = Number(stock) || 0;
   if (n <= 0) return 'agotado';
@@ -75,7 +96,7 @@ async function sincronizarTodo() {
     DB.obtenerTodos(DB.STORES.productos),
     DB.obtenerTodos(DB.STORES.catalogo),
   ]);
-  const mapaPublicados = new Map(publicados.map((d) => [d.id, d]));
+  const mapaPublicados = new Map(publicados.filter((d) => !String(d.id).startsWith('_')).map((d) => [d.id, d]));
   const tareas = [];
   let cambios = 0;
 
@@ -102,6 +123,9 @@ async function sincronizarTodo() {
 }
 
 window.Catalogo = {
+  CONFIG_ID,
+  obtenerConfig,
+  guardarConfig,
   fichaPublica,
   disponibilidadDe,
   sincronizarProducto,

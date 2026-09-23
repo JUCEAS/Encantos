@@ -338,6 +338,91 @@ document.getElementById('btnEliminarProducto').addEventListener('click', async (
   refrescarInventario();
 });
 
+// =========================================================
+// CATÁLOGO PÚBLICO: compartir y datos
+// =========================================================
+
+function urlCatalogo(ruta) {
+  return new URL(ruta, location.href).toString();
+}
+
+async function abrirModalCompartir() {
+  mostrarModal('modalCompartir');
+  const lista = document.getElementById('listaCompartir');
+  lista.innerHTML = '<div class="cargando">Cargando...</div>';
+
+  const [productos, config] = await Promise.all([Inventario.listarProductos(), Catalogo.obtenerConfig()]);
+  document.getElementById('avisoSinNumero').textContent = config.whatsapp
+    ? ''
+    : '⚠️ Aún no has puesto tu número de WhatsApp en "Datos del catálogo". Sin él, los pedidos de los clientes no te llegarán directo.';
+
+  const publicados = productos.filter((p) => p.publicarCatalogo);
+  if (!publicados.length) {
+    lista.innerHTML = '<div class="vacio">Todavía no hay productos publicados. Edita una planta y activa "Publicar en el catálogo para clientes".</div>';
+    return;
+  }
+
+  const cuentas = new Map();
+  publicados.forEach((p) => {
+    const c = Inventario.infoCategoria(p.categoria);
+    const act = cuentas.get(c.id) || { info: c, n: 0 };
+    act.n++;
+    cuentas.set(c.id, act);
+  });
+  const orden = Inventario.CATEGORIAS_INFO.map((c) => c.id);
+  const filas = [{ id: '', titulo: '🌿 Catálogo completo', n: publicados.length, url: urlCatalogo('catalogo.html') }]
+    .concat([...cuentas.values()]
+      .sort((a, b) => orden.indexOf(a.info.id) - orden.indexOf(b.info.id))
+      .map(({ info, n }) => ({ id: info.id, titulo: `${info.emoji} ${info.nombre}`, n, url: urlCatalogo(`c/${info.id}.html`) })));
+
+  const negocio = config.negocio || 'Encantos';
+  lista.innerHTML = filas.map((f, i) => `
+    <div class="fila-compartir">
+      <div class="nom">${escaparHtml(f.titulo)}<br><small>${f.n} ${f.n === 1 ? 'producto' : 'productos'}</small></div>
+      <button class="btn whatsapp" data-i="${i}" data-accion="wa">WhatsApp</button>
+      <button class="btn secundario" data-i="${i}" data-accion="ver">Ver</button>
+    </div>`).join('');
+
+  lista.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    const f = filas[Number(b.dataset.i)];
+    if (b.dataset.accion === 'ver') { window.open(f.url, '_blank', 'noopener'); return; }
+    const texto = f.id
+      ? `🌿 Mira nuestras plantas de *${f.titulo.replace(/^\S+\s/, '')}* en ${negocio}: fotos, precios y cuidados.\n${f.url}`
+      : `🌿 Este es el catálogo de ${negocio}: fotos, precios y cuidados de cada planta. Puedes hacer tu pedido desde ahí.\n${f.url}`;
+    window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
+  }));
+}
+
+async function abrirModalDatosCatalogo() {
+  const config = await Catalogo.obtenerConfig();
+  document.getElementById('cfgWhatsapp').value = config.whatsapp || '';
+  document.getElementById('cfgNegocio').value = config.negocio || 'Encantos';
+  document.getElementById('cfgBienvenida').value = config.bienvenida || '';
+  document.getElementById('cfgUbicacion').value = config.ubicacion || '';
+  mostrarModal('modalDatosCatalogo');
+}
+
+document.getElementById('btnCompartirCatalogo').addEventListener('click', abrirModalCompartir);
+document.getElementById('btnCerrarCompartir').addEventListener('click', () => ocultarModal('modalCompartir'));
+document.getElementById('btnDatosCatalogo').addEventListener('click', abrirModalDatosCatalogo);
+document.getElementById('btnCancelarDatos').addEventListener('click', () => ocultarModal('modalDatosCatalogo'));
+document.getElementById('btnGuardarDatos').addEventListener('click', async () => {
+  const numero = document.getElementById('cfgWhatsapp').value.replace(/[^0-9]/g, '');
+  if (numero && numero.length < 8) { alert('El número de WhatsApp parece incompleto. Revisa que tenga al menos 8 dígitos.'); return; }
+  try {
+    await Catalogo.guardarConfig({
+      whatsapp: numero,
+      negocio: document.getElementById('cfgNegocio').value,
+      bienvenida: document.getElementById('cfgBienvenida').value,
+      ubicacion: document.getElementById('cfgUbicacion').value,
+    });
+    ocultarModal('modalDatosCatalogo');
+    alert('Datos del catálogo guardados.');
+  } catch (err) {
+    alert('No se pudo guardar: ' + err.message);
+  }
+});
+
 // ---------- Búsqueda por foto ----------
 document.getElementById('btnBuscarFoto').addEventListener('click', () => {
   document.getElementById('previewFotoBusqueda').style.display = 'none';

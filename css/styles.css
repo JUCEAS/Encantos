@@ -248,3 +248,15 @@ textarea { resize: vertical; min-height: 60px; }
 /* ---------- Productos sin existencias ---------- */
 .card.sin-stock { opacity: 0.6; }
 .card .agotado { color: var(--rojo); font-weight: 700; }
+
+/* ---------- Fase 3: compartir catálogo ---------- */
+.fila-catalogo { display: flex; gap: 8px; margin: -4px 0 12px; }
+.fila-catalogo .btn { flex: 1; }
+.fila-compartir {
+  display: flex; align-items: center; gap: 8px; padding: 10px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.fila-compartir .nom { flex: 1; font-size: 14px; min-width: 0; }
+.fila-compartir .nom small { color: #888; }
+.fila-compartir .btn { width: auto; padding: 8px 10px; font-size: 13px; }
+.btn.whatsapp { background: #1f9d55; }
