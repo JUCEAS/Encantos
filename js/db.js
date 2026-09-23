@@ -111,6 +111,28 @@ async function incrementarCampo(nombreTienda, id, campo, delta) {
   });
 }
 
+// Venta atómica (requiere internet): en una sola operación revisa el stock
+// real en la nube, lo descuenta y guarda la venta. Si los dos celulares venden
+// la última unidad al mismo tiempo, solo una de las dos ventas pasa.
+async function venderEnTransaccion(productoId, cantidad, venta) {
+  await authReady;
+  const refProducto = coleccion(STORES.productos).doc(productoId);
+  const refVenta = coleccion(STORES.ventas).doc();
+  await firestoreDB.runTransaction(async (tx) => {
+    const snap = await tx.get(refProducto);
+    if (!snap.exists) {
+      const e = new Error('Producto no encontrado'); e.code = 'no-existe'; throw e;
+    }
+    const stock = Number(snap.data().stock) || 0;
+    if (stock < cantidad) {
+      const e = new Error('sin stock'); e.code = 'sin-stock'; e.stock = stock; throw e;
+    }
+    tx.update(refProducto, { stock: stock - cantidad });
+    tx.set(refVenta, venta);
+  });
+  return refVenta.id;
+}
+
 async function eliminar(nombreTienda, id) {
   await authReady;
   await coleccion(nombreTienda).doc(id).delete();
@@ -218,6 +240,7 @@ window.DB = {
   agregar,
   actualizar,
   incrementarCampo,
+  venderEnTransaccion,
   eliminar,
   obtener,
   obtenerTodos,
