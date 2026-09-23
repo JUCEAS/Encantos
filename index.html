@@ -34,6 +34,7 @@
       <input type="text" id="buscarTexto" placeholder="Buscar por nombre...">
       <button id="btnBuscarFoto" title="Buscar con una foto">📷</button>
     </div>
+    <select id="filtroCategoria" class="filtro-categoria"></select>
     <div id="listaProductos"><div class="cargando">Cargando inventario...</div></div>
   </section>
 
@@ -158,20 +159,55 @@
     <select id="campoCategoria"></select>
 
     <label>Nombre</label>
-    <input type="text" id="campoNombre" placeholder="Ej: Rosa roja, Piedra pómez 1kg...">
+    <input type="text" id="campoNombre" placeholder="Ej: Lengua de suegra, Piedra pómez 1 kg...">
 
     <label>Descripción</label>
-    <textarea id="campoDescripcion" placeholder="Detalles de la planta o producto..."></textarea>
+    <textarea id="campoDescripcion" placeholder="Lo que el cliente debe saber: cómo es, cuidados, para qué espacio es ideal..."></textarea>
 
-    <label>Tipo de sol (si aplica)</label>
-    <select id="campoTipoSol">
-      <option value="">No aplica</option>
-    </select>
+    <!-- Datos de la planta: se ocultan cuando es un insumo -->
+    <div id="camposPlanta">
+      <label>Nombre científico (opcional)</label>
+      <input type="text" id="campoNombreCientifico" placeholder="Ej: Sansevieria trifasciata">
 
-    <label>Frecuencia de riego (si aplica)</label>
-    <select id="campoRiego">
-      <option value="">No aplica</option>
-    </select>
+      <div class="dos-columnas">
+        <div>
+          <label>Luz</label>
+          <select id="campoTipoSol"></select>
+        </div>
+        <div>
+          <label>Riego</label>
+          <select id="campoRiego"></select>
+        </div>
+      </div>
+
+      <div class="dos-columnas">
+        <div>
+          <label>Ubicación</label>
+          <select id="campoUbicacion"></select>
+        </div>
+        <div>
+          <label>Cuidado</label>
+          <select id="campoDificultad"></select>
+        </div>
+      </div>
+
+      <label>Mascotas</label>
+      <select id="campoMascotas"></select>
+
+      <div class="dos-columnas">
+        <div>
+          <label>Tamaño de maceta</label>
+          <input type="text" id="campoTamanoMaceta" placeholder='Ej: 6"'>
+        </div>
+        <div>
+          <label>Tamaño adulto</label>
+          <input type="text" id="campoTamanoAdulto" placeholder="Ej: hasta 80 cm">
+        </div>
+      </div>
+    </div>
+
+    <label>Etiquetas</label>
+    <div id="campoEtiquetas" class="grupo-etiquetas"></div>
 
     <label>Origen</label>
     <select id="campoOrigen">
@@ -195,6 +231,15 @@
 
     <label>Cantidad en stock</label>
     <input type="number" id="campoStock" min="0" placeholder="0">
+
+    <div class="caja-catalogo">
+      <label class="interruptor">
+        <input type="checkbox" id="campoPublicarCatalogo">
+        <span>🛒 Publicar en el catálogo para clientes</span>
+      </label>
+      <p class="nota-catalogo">Los clientes verán la foto, el nombre, el precio, la luz, el riego y la descripción. <strong>Nunca</strong> el costo, el proveedor ni el stock exacto.</p>
+      <p class="aviso-catalogo" id="avisoCatalogo"></p>
+    </div>
 
     <div class="fila-botones">
       <button class="btn secundario" id="btnCancelarProducto">Cancelar</button>
@@ -304,6 +349,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="js/db.js"></script>
 <script src="js/inventario.js"></script>
+<script src="js/catalogo.js"></script>
 <script src="js/busqueda-visual.js"></script>
 <script src="js/clientes.js"></script>
 <script src="js/proveedores.js"></script>

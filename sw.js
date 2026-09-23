@@ -1,5 +1,5 @@
 // Service Worker de Encantos — habilita el uso 100% sin internet
-const CACHE_NAME = 'encantos-cache-v10';
+const CACHE_NAME = 'encantos-cache-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './js/db.js',
   './js/app.js',
   './js/inventario.js',
+  './js/catalogo.js',
   './js/ventas.js',
   './js/clientes.js',
   './js/proveedores.js',
@@ -47,7 +48,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+        // Solo borrar cachés viejas de ENCANTOS: ApiCampo y otras apps viven en el
+        // mismo sitio (juceas.github.io) y sus cachés no se deben tocar.
+        keys.filter((k) => k.startsWith('encantos-cache') && k !== CACHE_NAME).map((k) => caches.delete(k))
       )
     ).then(() => self.clients.claim())
   );

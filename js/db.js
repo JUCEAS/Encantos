@@ -27,6 +27,7 @@ const STORES = {
   clientes: 'clientes',
   ventas: 'ventas',
   proveedores: 'proveedores',
+  catalogo: 'catalogo_publico', // copia pública para clientes (sin costos)
 };
 
 // ---------- Acceso: solo cuentas de Google autorizadas ----------

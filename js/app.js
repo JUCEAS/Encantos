@@ -45,10 +45,18 @@ function ocultarModal(id) { document.getElementById(id).classList.remove('activo
 
 async function refrescarInventario(filtro = '') {
   const contenedor = document.getElementById('listaProductos');
-  const productos = filtro ? await Inventario.buscarPorTexto(filtro) : await Inventario.listarProductos();
+  let productos = filtro ? await Inventario.buscarPorTexto(filtro) : await Inventario.listarProductos();
+  const hayProductos = productos.length > 0;
+
+  const filtroCat = document.getElementById('filtroCategoria').value;
+  if (filtroCat === '__catalogo') productos = productos.filter((p) => p.publicarCatalogo);
+  else if (filtroCat === '__no_catalogo') productos = productos.filter((p) => !p.publicarCatalogo);
+  else if (filtroCat) productos = productos.filter((p) => p.categoria === filtroCat);
 
   if (productos.length === 0) {
-    contenedor.innerHTML = '<div class="vacio">Aún no hay productos. Toca "+" para agregar el primero.</div>';
+    contenedor.innerHTML = hayProductos
+      ? '<div class="vacio">No hay productos con este filtro.</div>'
+      : '<div class="vacio">Aún no hay productos. Toca "+" para agregar el primero.</div>';
     return;
   }
 
@@ -67,10 +75,11 @@ async function refrescarInventario(filtro = '') {
     <div class="card" data-id="${p.id}">
       <img class="foto-producto" src="${p.foto || ''}" onerror="this.style.opacity=0">
       <div class="info">
-        <span class="chip">${p.categoria}</span>
+        <span class="chip">${Inventario.infoCategoria(p.categoria).emoji} ${escaparHtml(p.categoria)}</span>
+        ${p.publicarCatalogo ? '<span class="chip catalogo">🛒 En catálogo</span>' : ''}
         <h3>${escaparHtml(p.nombre)}</h3>
         <p>${escaparHtml(p.descripcion || '')}</p>
-        ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? '☀️ ' + p.tipoSol : '', p.riego ? '💧 ' + p.riego : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
+        ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? ({ 'Sol completo': '☀️ ', 'Medio sol': '⛅ ', 'Sombra': '🌥️ ' }[p.tipoSol] || '☀️ ') + p.tipoSol : '', p.riego ? '💧 ' + p.riego : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
         ${lineaOrigen ? `<p style="font-size:12px;color:#888;">${lineaOrigen}</p>` : ''}
         <p class="precio">L. ${p.precio.toFixed(2)} &middot; <span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span></p>
       </div>
@@ -104,6 +113,54 @@ async function mostrarOpcionesProducto(id) {
 
 document.getElementById('buscarTexto').addEventListener('input', (e) => refrescarInventario(e.target.value));
 
+// Filtro por categoría / catálogo en la pestaña Inventario
+(function llenarFiltroCategoria() {
+  const sel = document.getElementById('filtroCategoria');
+  const plantas = Inventario.CATEGORIAS_INFO.filter((c) => c.grupo === 'planta');
+  const insumos = Inventario.CATEGORIAS_INFO.filter((c) => c.grupo === 'insumo');
+  const opt = (c) => `<option value="${c.nombre}">${c.emoji} ${c.nombre}</option>`;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' +
+    '<option value="__catalogo">🛒 Publicadas en catálogo</option>' +
+    '<option value="__no_catalogo">🚫 No publicadas</option>' +
+    `<optgroup label="Plantas">${plantas.map(opt).join('')}</optgroup>` +
+    `<optgroup label="Complementos">${insumos.map(opt).join('')}</optgroup>`;
+  sel.addEventListener('change', () => refrescarInventario(document.getElementById('buscarTexto').value));
+})();
+
+function opcionesSelect(lista, textoVacio) {
+  return `<option value="">${textoVacio}</option>` + lista.map((v) => `<option value="${v}">${v}</option>`).join('');
+}
+
+function esInsumo(nombreCategoria) {
+  return Inventario.infoCategoria(nombreCategoria).grupo === 'insumo';
+}
+
+function actualizarFormularioSegunCategoria() {
+  const insumo = esInsumo(document.getElementById('campoCategoria').value);
+  document.getElementById('camposPlanta').style.display = insumo ? 'none' : 'block';
+  actualizarAvisoCatalogo();
+}
+
+function actualizarAvisoCatalogo() {
+  const aviso = document.getElementById('avisoCatalogo');
+  if (!document.getElementById('campoPublicarCatalogo').checked) { aviso.textContent = ''; return; }
+  const faltan = [];
+  if (!fotoTemporalDataUrl) faltan.push('foto');
+  if (!(parseFloat(document.getElementById('campoPrecio').value) > 0)) faltan.push('precio');
+  if (!document.getElementById('campoDescripcion').value.trim()) faltan.push('descripción');
+  if (!esInsumo(document.getElementById('campoCategoria').value)) {
+    if (!document.getElementById('campoTipoSol').value) faltan.push('luz');
+    if (!document.getElementById('campoRiego').value) faltan.push('riego');
+  }
+  aviso.textContent = faltan.length ? '⚠️ Para que se vea completa en el catálogo falta: ' + faltan.join(', ') + '.' : '';
+}
+
+['campoCategoria'].forEach((id) => document.getElementById(id).addEventListener('change', actualizarFormularioSegunCategoria));
+['campoPublicarCatalogo', 'campoPrecio', 'campoDescripcion', 'campoTipoSol', 'campoRiego'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', actualizarAvisoCatalogo);
+  document.getElementById(id).addEventListener('change', actualizarAvisoCatalogo);
+});
+
 async function abrirModalProducto(producto = null) {
   productoEditandoId = producto ? producto.id : null;
   productoEditandoCreadoEl = producto ? producto.creadoEl : null;
@@ -113,21 +170,36 @@ async function abrirModalProducto(producto = null) {
   document.getElementById('tituloModalProducto').textContent = producto ? 'Editar producto' : 'Nuevo producto';
 
   const select = document.getElementById('campoCategoria');
-  select.innerHTML = Inventario.CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join('');
+  const opt = (c) => `<option value="${c.nombre}">${c.emoji} ${c.nombre}</option>`;
+  select.innerHTML =
+    `<optgroup label="Plantas">${Inventario.CATEGORIAS_INFO.filter((c) => c.grupo === 'planta').map(opt).join('')}</optgroup>` +
+    `<optgroup label="Complementos">${Inventario.CATEGORIAS_INFO.filter((c) => c.grupo === 'insumo').map(opt).join('')}</optgroup>`;
 
   const selectSol = document.getElementById('campoTipoSol');
-  selectSol.innerHTML = '<option value="">No aplica</option>' +
-    Inventario.TIPOS_SOL.map((s) => `<option value="${s}">${s}</option>`).join('');
-
+  selectSol.innerHTML = opcionesSelect(Inventario.TIPOS_SOL, 'Sin definir');
   const selectRiego = document.getElementById('campoRiego');
-  selectRiego.innerHTML = '<option value="">No aplica</option>' +
-    Inventario.TIPOS_RIEGO.map((r) => `<option value="${r}">${r}</option>`).join('');
+  selectRiego.innerHTML = opcionesSelect(Inventario.TIPOS_RIEGO, 'Sin definir');
+  document.getElementById('campoUbicacion').innerHTML = opcionesSelect(Inventario.UBICACIONES, 'Sin definir');
+  document.getElementById('campoDificultad').innerHTML = opcionesSelect(Inventario.DIFICULTADES, 'Sin definir');
+  document.getElementById('campoMascotas').innerHTML = opcionesSelect(Inventario.MASCOTAS, 'No sé / sin definir');
+
+  const etiquetasActuales = producto?.etiquetas || [];
+  document.getElementById('campoEtiquetas').innerHTML = Inventario.ETIQUETAS.map((e) =>
+    `<label><input type="checkbox" value="${e}" ${etiquetasActuales.includes(e) ? 'checked' : ''}>${e}</label>`
+  ).join('');
 
   document.getElementById('campoNombre').value = producto?.nombre || '';
   select.value = producto?.categoria || Inventario.CATEGORIAS[0];
   document.getElementById('campoDescripcion').value = producto?.descripcion || '';
   selectSol.value = producto?.tipoSol || '';
   selectRiego.value = producto?.riego || '';
+  document.getElementById('campoNombreCientifico').value = producto?.nombreCientifico || '';
+  document.getElementById('campoUbicacion').value = producto?.ubicacion || '';
+  document.getElementById('campoDificultad').value = producto?.dificultad || '';
+  document.getElementById('campoMascotas').value = producto?.mascotas || '';
+  document.getElementById('campoTamanoMaceta').value = producto?.tamanoMaceta || '';
+  document.getElementById('campoTamanoAdulto').value = producto?.tamanoAdulto || '';
+  document.getElementById('campoPublicarCatalogo').checked = !!producto?.publicarCatalogo;
 
   await refrescarSelectProveedorProducto(producto?.proveedorId || '');
   const selectOrigen = document.getElementById('campoOrigen');
@@ -147,6 +219,7 @@ async function abrirModalProducto(producto = null) {
   }
 
   document.getElementById('filaEliminarProducto').style.display = producto ? 'flex' : 'none';
+  actualizarFormularioSegunCategoria();
 
   mostrarModal('modalProducto');
 }
@@ -185,6 +258,7 @@ async function manejarSeleccionFotoProducto(e) {
   const preview = document.getElementById('previewFotoProducto');
   preview.src = comprimida;
   preview.style.display = 'block';
+  actualizarAvisoCatalogo();
 
   // Generar la huella visual en segundo plano para habilitar la búsqueda por foto
   try {
@@ -218,14 +292,24 @@ document.getElementById('btnGuardarProducto').addEventListener('click', async ()
     if (!confirm('No seleccionaste un proveedor. ¿Guardar de todas formas?')) return;
   }
 
+  const datosPlanta = !esInsumo(document.getElementById('campoCategoria').value);
   await Inventario.guardarProducto({
     id: productoEditandoId,
     creadoEl: productoEditandoCreadoEl,
     nombre,
     categoria: document.getElementById('campoCategoria').value,
     descripcion: document.getElementById('campoDescripcion').value,
+    nombreCientifico: document.getElementById('campoNombreCientifico').value,
     tipoSol: document.getElementById('campoTipoSol').value,
     riego: document.getElementById('campoRiego').value,
+    ubicacion: document.getElementById('campoUbicacion').value,
+    dificultad: document.getElementById('campoDificultad').value,
+    mascotas: document.getElementById('campoMascotas').value,
+    tamanoMaceta: document.getElementById('campoTamanoMaceta').value,
+    tamanoAdulto: document.getElementById('campoTamanoAdulto').value,
+    etiquetas: [...document.querySelectorAll('#campoEtiquetas input:checked')].map((i) => i.value),
+    ...(datosPlanta ? {} : { nombreCientifico: '', tipoSol: '', riego: '', ubicacion: '', dificultad: '', mascotas: '', tamanoAdulto: '' }),
+    publicarCatalogo: document.getElementById('campoPublicarCatalogo').checked,
     origen: document.getElementById('campoOrigen').value,
     proveedorId: document.getElementById('campoProveedorProducto').value || null,
     costo: document.getElementById('campoCosto').value,
@@ -639,6 +723,7 @@ document.getElementById('inputImportar').addEventListener('change', async (e) =>
   if (!confirm('Esto reemplazará todos los datos actuales con los del respaldo. ¿Continuar?')) return;
   try {
     await Backup.importarRespaldoDesdeArchivo(archivo);
+    await Catalogo.sincronizarTodo().catch(() => {});
     alert('Respaldo importado correctamente.');
     refrescarInventario();
     refrescarVentas();
@@ -697,7 +782,16 @@ btnSesion.addEventListener('click', () => {
   if (confirm('¿Cerrar sesión en este celular? Necesitarás internet para volver a entrar.')) DB.cerrarSesion();
 });
 
-DB.authReady.then(() => refrescarInventario());
+DB.authReady.then(() => {
+  refrescarInventario();
+  // Revisa que el catálogo público coincida con el inventario (precios, fotos,
+  // disponibilidad). Solo con internet, para no gastar tiempo sin señal.
+  if (navigator.onLine) {
+    Catalogo.sincronizarTodo()
+      .then((n) => { if (n) console.info('Catálogo actualizado: ' + n + ' cambio(s)'); })
+      .catch((e) => console.warn('No se pudo revisar el catálogo', e));
+  }
+});
 
 // Sincronización en tiempo real: cuando el otro celular agrega, edita o vende
 // algo, esta pantalla se actualiza sola (y al revés).

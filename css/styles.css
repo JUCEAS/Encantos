@@ -221,3 +221,26 @@ textarea { resize: vertical; min-height: 60px; }
   border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer;
   max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ---------- Fase 2: ficha de planta y catálogo ---------- */
+.dos-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dos-columnas > div { min-width: 0; }
+.grupo-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; }
+.grupo-etiquetas label {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  border: 1px solid var(--borde); border-radius: 999px; padding: 6px 10px;
+  font-size: 13px; color: var(--texto); background: var(--blanco); cursor: pointer;
+}
+.grupo-etiquetas input { width: auto; margin: 0; }
+.grupo-etiquetas label:has(input:checked) { background: #e6efe2; border-color: var(--verde-claro); }
+.caja-catalogo {
+  margin-top: 14px; padding: 12px; border-radius: 12px;
+  background: #eef4ea; border: 1px solid #cfe0c6;
+}
+.interruptor { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; color: var(--verde); font-weight: 600; cursor: pointer; }
+.interruptor input { width: 22px; height: 22px; margin: 0; accent-color: var(--verde); }
+.nota-catalogo { font-size: 12px; color: #666; margin: 8px 0 0; line-height: 1.4; }
+.aviso-catalogo { font-size: 12px; color: var(--tierra); margin: 6px 0 0; font-weight: 600; }
+.aviso-catalogo:empty { display: none; }
+.filtro-categoria { margin: -2px 0 12px; }
+.chip.catalogo { background: #e6efe2; color: var(--verde); }
