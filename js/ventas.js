@@ -37,6 +37,25 @@ async function registrarVenta(datos) {
     fecha: new Date().toISOString(),
   };
 
+  // Con internet: venta atómica contra el stock real de la nube.
+  if (navigator.onLine) {
+    try {
+      await DB.venderEnTransaccion(producto.id, cantidad, venta);
+      Catalogo.actualizarDisponibilidad(producto.id).catch((e) => console.warn('Catálogo no sincronizado', e));
+      return venta;
+    } catch (err) {
+      if (err.code === 'sin-stock') {
+        throw new Error(err.stock <= 0
+          ? `"${producto.nombre}" se acaba de agotar: otra persona vendió la última unidad.`
+          : `Otra persona acaba de vender "${producto.nombre}". Ahora solo quedan ${err.stock}.`);
+      }
+      if (err.code === 'no-existe') throw new Error('Este producto ya no existe en el inventario.');
+      // Si falló por la conexión, se registra como venta sin internet (abajo).
+      console.warn('Venta atómica no disponible, se guarda sin conexión', err);
+    }
+  }
+
+  // Sin internet: se guarda en el teléfono y se sincroniza al volver la señal.
   await DB.agregar(DB.STORES.ventas, venta);
   await Inventario.ajustarStock(producto.id, -cantidad);
 
