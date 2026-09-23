@@ -37,6 +37,7 @@ const STORES = {
 // que son las que realmente protegen los datos en la nube.
 const CORREOS_AUTORIZADOS = [
   'juceas19@gmail.com',
+  'sairareyes4@gmail.com',
   // Para agregar a otra persona: 'sucorreo@gmail.com',  (y también en firestore.rules)
 ];
 
