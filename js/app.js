@@ -53,6 +53,16 @@ async function refrescarInventario(filtro = '') {
   else if (filtroCat === '__no_catalogo') productos = productos.filter((p) => !p.publicarCatalogo);
   else if (filtroCat) productos = productos.filter((p) => p.categoria === filtroCat);
 
+  // Aviso si una venta sin internet dejó algún stock en negativo
+  const negativos = productos.filter((p) => p.stock < 0);
+  const avisoNegativo = negativos.length
+    ? `<div class="card" style="background:#fbe9e6;border:1px solid #e8b9b0;display:block;font-size:13px;line-height:1.4;">
+        ⚠️ <strong>Se vendió más de lo que había</strong> en: ${negativos.map((p) => escaparHtml(p.nombre) + ' (' + p.stock + ')').join(', ')}.
+        Pasó porque se vendió la misma planta en los dos celulares y uno estaba sin internet.
+        Revisen la venta y corrijan el stock editando el producto.
+      </div>`
+    : '';
+
   if (productos.length === 0) {
     contenedor.innerHTML = hayProductos
       ? '<div class="vacio">No hay productos con este filtro.</div>'
@@ -63,7 +73,7 @@ async function refrescarInventario(filtro = '') {
   const proveedores = await Proveedores.listarProveedores();
   const mapaProveedores = new Map(proveedores.map((pr) => [pr.id, pr]));
 
-  contenedor.innerHTML = productos.map((p) => {
+  contenedor.innerHTML = avisoNegativo + productos.map((p) => {
     let lineaOrigen = '';
     if (p.origen === 'Compra a proveedor') {
       const prov = mapaProveedores.get(p.proveedorId);
@@ -81,7 +91,7 @@ async function refrescarInventario(filtro = '') {
         <p>${escaparHtml(p.descripcion || '')}</p>
         ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? ({ 'Sol completo': '☀️ ', 'Medio sol': '⛅ ', 'Sombra': '🌥️ ' }[p.tipoSol] || '☀️ ') + p.tipoSol : '', p.riego ? '💧 ' + p.riego : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
         ${lineaOrigen ? `<p style="font-size:12px;color:#888;">${lineaOrigen}</p>` : ''}
-        <p class="precio">L. ${p.precio.toFixed(2)} &middot; ${p.stock <= 0 ? '<span class="agotado">⛔ Agotado</span>' : `<span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span>`}</p>
+        <p class="precio">L. ${p.precio.toFixed(2)} &middot; ${p.stock < 0 ? `<span class="agotado">⚠️ Stock ${p.stock}: se vendió de más</span>` : p.stock <= 0 ? '<span class="agotado">⛔ Agotado</span>' : `<span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span>`}</p>
       </div>
     </div>
   `;
