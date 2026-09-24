@@ -266,3 +266,9 @@ textarea { resize: vertical; min-height: 60px; }
 .vendedora .dos-columnas label { margin-top: 0; }
 .vendedora .quitar { background: none; border: none; color: var(--rojo); font-size: 13px; cursor: pointer; padding: 6px 0 0; }
 .nota-envio { font-size: 13px; background: #eef4ea; border-radius: 10px; padding: 8px 10px; margin: 8px 0; color: var(--verde); }
+
+/* ---------- Menú de acciones ---------- */
+.menu-acciones .modal { display: flex; flex-direction: column; gap: 10px; }
+.menu-acciones .modal h2 { margin: 0 0 4px; }
+.menu-acciones .mensaje-accion { margin: 0 0 4px; font-size: 14px; color: var(--rojo); line-height: 1.4; }
+.btn.btn-cancelar { background: transparent; color: #666; border: 1px solid var(--borde); }
