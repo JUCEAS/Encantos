@@ -260,3 +260,9 @@ textarea { resize: vertical; min-height: 60px; }
 .fila-compartir .nom small { color: #888; }
 .fila-compartir .btn { width: auto; padding: 8px 10px; font-size: 13px; }
 .btn.whatsapp { background: #1f9d55; }
+
+/* ---------- Vendedoras ---------- */
+.vendedora { border: 1px solid var(--borde); border-radius: 12px; padding: 10px; margin-top: 8px; background: var(--blanco); }
+.vendedora .dos-columnas label { margin-top: 0; }
+.vendedora .quitar { background: none; border: none; color: var(--rojo); font-size: 13px; cursor: pointer; padding: 6px 0 0; }
+.nota-envio { font-size: 13px; background: #eef4ea; border-radius: 10px; padding: 8px 10px; margin: 8px 0; color: var(--verde); }
