@@ -13,12 +13,34 @@ async function exportarRespaldo() {
   URL.revokeObjectURL(url);
 }
 
+// Revisa que el archivo sea realmente un respaldo de Encantos antes de tocar
+// los datos. Importar reemplaza TODO lo que hay en la nube (en ambos celulares).
+function validarRespaldo(datos) {
+  const colecciones = ['productos', 'clientes', 'ventas', 'proveedores'];
+  const esObjeto = datos && typeof datos === 'object' && !Array.isArray(datos);
+  if (!esObjeto || !colecciones.some((c) => Array.isArray(datos[c]))) {
+    throw new Error('Este archivo no es un respaldo de Encantos. No se cambió nada.');
+  }
+  for (const c of colecciones) {
+    if (datos[c] !== undefined && !Array.isArray(datos[c])) throw new Error(`El respaldo está dañado (${c}). No se cambió nada.`);
+    for (const r of datos[c] || []) {
+      if (!r || typeof r !== 'object' || Array.isArray(r)) throw new Error(`El respaldo tiene registros dañados en ${c}. No se cambió nada.`);
+    }
+  }
+  const total = colecciones.reduce((n, c) => n + (datos[c] || []).length, 0);
+  if (total === 0) throw new Error('El respaldo está vacío. No se cambió nada.');
+}
+
 function importarRespaldoDesdeArchivo(archivo) {
   return new Promise((resolve, reject) => {
     const lector = new FileReader();
     lector.onload = async (e) => {
       try {
-        const datos = JSON.parse(e.target.result);
+        let datos;
+        try { datos = JSON.parse(e.target.result); } catch { throw new Error('El archivo no es un respaldo válido.'); }
+        validarRespaldo(datos);
+        // Copia de seguridad automática de lo que hay ahora, por si acaso
+        await exportarRespaldo();
         await DB.importarTodo(datos);
         resolve(datos);
       } catch (err) {
