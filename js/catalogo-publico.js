@@ -32,6 +32,9 @@ const ORDEN_DISP = { disponible: 0, ultimas: 1, agotado: 2 };
 
 let plantas = [];
 let config = {};
+let vendedora = null; // quién compartió el enlace (recibe los pedidos)
+// Se lee al abrir, antes de que la página reescriba la dirección
+const HASH_INICIAL = new URLSearchParams(location.hash.slice(1));
 const estado = leerEstadoUrl();
 let pedido = cargarPedido();
 
@@ -52,8 +55,25 @@ function avisar(texto) {
   clearTimeout(avisar._t);
   avisar._t = setTimeout(() => { el.hidden = true; }, 2200);
 }
+// Firma del enlace: #v=saira (o ?v=saira). Se recuerda en este teléfono para
+// que, si el cliente vuelve otro día, su pedido llegue a la misma vendedora.
+function leerFirmaVendedora() {
+  const h = HASH_INICIAL;
+  const q = new URLSearchParams(location.search);
+  let id = h.get('v') || q.get('v') || '';
+  try {
+    if (id) localStorage.setItem('encantos-vendedora', id);
+    else id = localStorage.getItem('encantos-vendedora') || '';
+  } catch { /* sin almacenamiento */ }
+  return id;
+}
+
+function saludo() {
+  return 'Hola ' + (vendedora ? vendedora.nombre : (config.negocio || 'Encantos'));
+}
+
 function numeroWhatsApp() {
-  let n = String(config.whatsapp || '').replace(/[^0-9]/g, '');
+  let n = String((vendedora && vendedora.whatsapp) || config.whatsapp || '').replace(/[^0-9]/g, '');
   if (n.length === 8) n = '504' + n; // número hondureño sin código de país
   return n;
 }
@@ -96,7 +116,7 @@ async function cargar() {
     aplicarConfig();
     pedido = pedido.filter((l) => plantas.some((p) => p.id === l.id && p.disponibilidad !== 'agotado'));
     dibujarTodo();
-    const idFicha = new URLSearchParams(location.hash.slice(1)).get('p');
+    const idFicha = HASH_INICIAL.get('p');
     if (idFicha) abrirFicha(idFicha);
   } catch (err) {
     console.error(err);
@@ -106,6 +126,12 @@ async function cargar() {
 }
 
 function aplicarConfig() {
+  const idFirma = leerFirmaVendedora();
+  vendedora = (config.vendedores || []).find((v) => v.id === idFirma && v.whatsapp) || null;
+  if (vendedora) {
+    const b = document.getElementById('bienvenida');
+    b.insertAdjacentHTML('afterend', `<p class="ubicacion">💬 Te atiende <strong>${esc(vendedora.nombre)}</strong></p>`);
+  }
   if (config.negocio) {
     document.getElementById('nombreNegocio').textContent = config.negocio;
   }
@@ -231,9 +257,9 @@ function abrirFicha(id) {
     ${p.etiquetas?.length ? `<div class="etiquetas">${p.etiquetas.map((e) => `<span>${esc(e)}</span>`).join('')}</div>` : ''}
     <div class="acciones">
       ${agotada
-        ? `<a class="btn-whatsapp" target="_blank" rel="noopener" href="${esc(enlaceWhatsApp(`Hola ${config.negocio || 'Encantos'} 🌿, ¿cuándo vuelven a tener *${p.nombre}*?`))}">Avísame cuando vuelva a haber</a>`
+        ? `<a class="btn-whatsapp" target="_blank" rel="noopener" href="${esc(enlaceWhatsApp(`${saludo()} 🌿, ¿cuándo vuelven a tener *${p.nombre}*?`))}">Avísame cuando vuelva a haber</a>`
         : `<button class="btn-principal" id="btnAgregar">🧺 Agregar a mi pedido</button>
-           <a class="btn-whatsapp" target="_blank" rel="noopener" href="${esc(enlaceWhatsApp(`Hola ${config.negocio || 'Encantos'} 🌿, me interesa: *${p.nombre}* (${lempiras(p.precio)}). ¿Está disponible?`))}">Preguntar por WhatsApp</a>`}
+           <a class="btn-whatsapp" target="_blank" rel="noopener" href="${esc(enlaceWhatsApp(`${saludo()} 🌿, me interesa: *${p.nombre}* (${lempiras(p.precio)}). ¿Está disponible?`))}">Preguntar por WhatsApp</a>`}
       <button class="btn-borde" id="btnCompartirPlanta">📤 Compartir esta planta</button>
     </div>`;
   const btnAgregar = document.getElementById('btnAgregar');
@@ -241,7 +267,7 @@ function abrirFicha(id) {
   document.getElementById('btnCompartirPlanta').addEventListener('click', () => {
     const url = new URL('catalogo.html', location.href);
     if (estado.cat) url.searchParams.set('cat', estado.cat);
-    url.hash = 'p=' + p.id;
+    url.hash = 'p=' + p.id + (vendedora ? '&v=' + vendedora.id : '');
     compartir(`${p.nombre} · ${lempiras(p.precio)} 🌿`, url.toString());
   });
   document.getElementById('velo').hidden = false;
@@ -321,7 +347,7 @@ document.getElementById('btnEnviarPedido').addEventListener('click', () => {
   if (!lineas.length) return;
   const total = lineas.reduce((s, l) => s + l.cantidad * (Number(l.p.precio) || 0), 0);
   const texto =
-    `Hola ${config.negocio || 'Encantos'} 🌿, quiero hacer este pedido:\n\n` +
+    `${saludo()} 🌿, quiero hacer este pedido${vendedora ? ' en ' + (config.negocio || 'Encantos') : ''}:\n\n` +
     lineas.map((l) => `• ${l.cantidad} × ${l.p.nombre} — ${lempiras(l.cantidad * l.p.precio)}`).join('\n') +
     `\n\n*Total: ${lempiras(total)}*\n¿Me confirman disponibilidad y entrega?`;
   window.open(enlaceWhatsApp(texto), '_blank', 'noopener');
@@ -336,9 +362,10 @@ async function compartir(titulo, url) {
 }
 document.getElementById('btnCompartir').addEventListener('click', () => {
   // Una sola categoría sin otros filtros: usar el enlace con vista previa propia
-  const url = estado.cat && !estado.luz && !estado.q
+  let url = estado.cat && !estado.luz && !estado.q
     ? new URL(`c/${estado.cat}.html`, location.href).toString()
-    : location.href;
+    : location.href.split('#')[0];
+  if (vendedora) url += '#v=' + vendedora.id;
   compartir(`${document.getElementById('tituloSeccion').textContent} · ${config.negocio || 'Encantos'} 🌿`, url);
 });
 
