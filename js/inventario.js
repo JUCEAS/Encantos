@@ -170,7 +170,6 @@ window.Inventario = {
   DIFICULTADES,
   MASCOTAS,
   ETIQUETAS,
-  normalizarCategoria,
   infoCategoria,
   TIPOS_SOL,
   TIPOS_RIEGO,
