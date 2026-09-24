@@ -358,6 +358,7 @@ function urlCatalogo(ruta) {
 
 async function abrirModalCompartir() {
   mostrarModal('modalCompartir');
+  document.getElementById('notaEnvio')?.remove();
   const lista = document.getElementById('listaCompartir');
   lista.innerHTML = '<div class="cargando">Cargando...</div>';
 
@@ -386,6 +387,17 @@ async function abrirModalCompartir() {
       .map(({ info, n }) => ({ id: info.id, titulo: `${info.emoji} ${info.nombre}`, n, url: urlCatalogo(`c/${info.id}.html`) })));
 
   const negocio = config.negocio || 'Encantos';
+
+  // Si quien comparte es una vendedora registrada, sus enlaces llevan su firma
+  const yo = (config.vendedores || []).find((v) => v.correo && v.correo === correoSesion());
+  const conFirma = yo && yo.whatsapp;
+  if (conFirma) filas.forEach((f) => { f.url += '#v=' + yo.id; });
+  const numeroVisible = (n) => String(n).replace(/^504/, '').replace(/^(\d{4})(\d{4})$/, '$1-$2');
+  document.getElementById('avisoSinNumero').insertAdjacentHTML('afterend',
+    `<p class="nota-envio" id="notaEnvio">${conFirma
+      ? `📲 Los pedidos de estos enlaces te llegarán a ti, <strong>${escaparHtml(yo.nombre)}</strong> (${escaparHtml(numeroVisible(yo.whatsapp))}).`
+      : `📲 Los pedidos de estos enlaces llegarán al número principal${config.whatsapp ? ' (' + escaparHtml(numeroVisible(config.whatsapp)) + ')' : ''}.${yo ? ' Agrega tu WhatsApp en "Datos del catálogo" para recibirlos tú.' : ''}`}</p>`);
+
   lista.innerHTML = filas.map((f, i) => `
     <div class="fila-compartir">
       <div class="nom">${escaparHtml(f.titulo)}<br><small>${f.n} ${f.n === 1 ? 'producto' : 'productos'}</small></div>
@@ -403,14 +415,64 @@ async function abrirModalCompartir() {
   }));
 }
 
+let vendedorasEditando = [];
+
+function correoSesion() {
+  try { return ((firebase.auth().currentUser || {}).email || '').toLowerCase(); } catch (e) { return ''; }
+}
+
+// Lee lo escrito en el formulario para no perderlo al agregar o quitar filas
+function leerVendedorasDelFormulario() {
+  document.querySelectorAll('#cfgVendedores .vendedora').forEach((fila) => {
+    const v = vendedorasEditando[Number(fila.dataset.i)];
+    if (!v) return;
+    v.nombre = fila.querySelector('[data-campo="nombre"]').value;
+    v.whatsapp = fila.querySelector('[data-campo="whatsapp"]').value;
+    v.correo = fila.querySelector('[data-campo="correo"]').value;
+  });
+}
+
+function dibujarVendedoras() {
+  document.getElementById('cfgVendedores').innerHTML = vendedorasEditando.map((v, i) => `
+    <div class="vendedora" data-i="${i}">
+      <div class="dos-columnas">
+        <div><label>Nombre</label><input type="text" data-campo="nombre" value="${escaparHtml(v.nombre || '')}" placeholder="Ej: Saira"></div>
+        <div><label>WhatsApp</label><input type="tel" inputmode="tel" data-campo="whatsapp" value="${escaparHtml(v.whatsapp || '')}" placeholder="9876-5432"></div>
+      </div>
+      <label>Correo con el que entra a la app</label>
+      <input type="email" data-campo="correo" value="${escaparHtml(v.correo || '')}" placeholder="nombre@gmail.com">
+      <button type="button" class="quitar" data-quitar="${i}">Quitar vendedora</button>
+    </div>`).join('') || '<p class="nota-catalogo">Aún no hay vendedoras. Todos los pedidos llegan al número principal.</p>';
+  document.querySelectorAll('#cfgVendedores [data-quitar]').forEach((b) => b.addEventListener('click', () => {
+    leerVendedorasDelFormulario();
+    vendedorasEditando.splice(Number(b.dataset.quitar), 1);
+    dibujarVendedoras();
+  }));
+}
+
 async function abrirModalDatosCatalogo() {
   const config = await Catalogo.obtenerConfig();
   document.getElementById('cfgWhatsapp').value = config.whatsapp || '';
   document.getElementById('cfgNegocio').value = config.negocio || 'Encantos';
   document.getElementById('cfgBienvenida').value = config.bienvenida || '';
   document.getElementById('cfgUbicacion').value = config.ubicacion || '';
+  vendedorasEditando = (config.vendedores || []).map((v) => ({ ...v }));
+  if (!vendedorasEditando.length) {
+    // Primera vez: propone a las dos cuentas que usan la app
+    vendedorasEditando = [
+      { id: 'encantos', nombre: 'Julio', whatsapp: config.whatsapp || '', correo: 'juceas19@gmail.com' },
+      { id: 'saira', nombre: 'Saira', whatsapp: '', correo: 'sairareyes4@gmail.com' },
+    ];
+  }
+  dibujarVendedoras();
   mostrarModal('modalDatosCatalogo');
 }
+
+document.getElementById('btnAgregarVendedora').addEventListener('click', () => {
+  leerVendedorasDelFormulario();
+  vendedorasEditando.push({ id: '', nombre: '', whatsapp: '', correo: '' });
+  dibujarVendedoras();
+});
 
 document.getElementById('btnCompartirCatalogo').addEventListener('click', abrirModalCompartir);
 document.getElementById('btnCerrarCompartir').addEventListener('click', () => ocultarModal('modalCompartir'));
@@ -419,8 +481,20 @@ document.getElementById('btnCancelarDatos').addEventListener('click', () => ocul
 document.getElementById('btnGuardarDatos').addEventListener('click', async () => {
   const numero = document.getElementById('cfgWhatsapp').value.replace(/[^0-9]/g, '');
   if (numero && numero.length < 8) { alert('El número de WhatsApp parece incompleto. Revisa que tenga al menos 8 dígitos.'); return; }
+  leerVendedorasDelFormulario();
+  const vendedores = [];
+  for (const v of vendedorasEditando) {
+    const nombre = (v.nombre || '').trim();
+    const tel = (v.whatsapp || '').replace(/[^0-9]/g, '');
+    if (!nombre && !tel) continue; // fila vacía
+    if (!nombre) { alert('Falta el nombre de una vendedora.'); return; }
+    if (tel && tel.length < 8) { alert(`El WhatsApp de ${nombre} parece incompleto.`); return; }
+    const id = v.id || Catalogo.idVendedor(nombre, vendedores.map((x) => x.id));
+    vendedores.push({ id, nombre, whatsapp: tel, correo: v.correo });
+  }
   try {
     await Catalogo.guardarConfig({
+      vendedores,
       whatsapp: numero,
       negocio: document.getElementById('cfgNegocio').value,
       bienvenida: document.getElementById('cfgBienvenida').value,
