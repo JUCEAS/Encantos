@@ -36,6 +36,29 @@ document.getElementById('btnAgregar').addEventListener('click', () => {
   if (vistaActiva === 'vista-proveedores') abrirModalProveedor();
 });
 
+// Menú de acciones (reemplaza los confirm "Aceptar = … / Cancelar = …",
+// que eran confusos). Devuelve el id de la opción elegida o null.
+function elegirAccion(titulo, opciones, mensaje = '') {
+  return new Promise((resolve) => {
+    const velo = document.createElement('div');
+    velo.className = 'modal-overlay activo menu-acciones';
+    velo.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h2>${escaparHtml(titulo)}</h2>
+        ${mensaje ? `<p class="mensaje-accion">${escaparHtml(mensaje)}</p>` : ''}
+        ${opciones.map((o) => `<button class="btn ${o.principal ? '' : 'secundario'}" data-accion="${escaparHtml(o.id)}">${escaparHtml(o.texto)}</button>`).join('')}
+        <button class="btn btn-cancelar" data-accion="">Cancelar</button>
+      </div>`;
+    const cerrar = (valor) => { velo.remove(); resolve(valor || null); };
+    velo.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-accion]');
+      if (b) cerrar(b.dataset.accion);
+      else if (e.target === velo) cerrar(null);
+    });
+    document.body.appendChild(velo);
+  });
+}
+
 function mostrarModal(id) { document.getElementById(id).classList.add('activo'); }
 function ocultarModal(id) { document.getElementById(id).classList.remove('activo'); }
 
@@ -83,15 +106,15 @@ async function refrescarInventario(filtro = '') {
     }
     return `
     <div class="card${p.stock <= 0 ? ' sin-stock' : ''}" data-id="${p.id}">
-      <img class="foto-producto" src="${p.foto || ''}" onerror="this.style.opacity=0">
+      <img class="foto-producto" src="${srcFotoSegura(p.foto)}" alt="" onerror="this.style.opacity=0">
       <div class="info">
         <span class="chip">${Inventario.infoCategoria(p.categoria).emoji} ${escaparHtml(p.categoria)}</span>
         ${p.publicarCatalogo ? '<span class="chip catalogo">🛒 En catálogo</span>' : ''}
         <h3>${escaparHtml(p.nombre)}</h3>
         <p>${escaparHtml(p.descripcion || '')}</p>
-        ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? ({ 'Sol completo': '☀️ ', 'Medio sol': '⛅ ', 'Sombra': '🌥️ ' }[p.tipoSol] || '☀️ ') + p.tipoSol : '', p.riego ? '💧 ' + p.riego : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
+        ${(p.tipoSol || p.riego) ? `<p style="font-size:12px;color:#888;">${[p.tipoSol ? ({ 'Sol completo': '☀️ ', 'Medio sol': '⛅ ', 'Sombra': '🌥️ ' }[p.tipoSol] || '☀️ ') + escaparHtml(p.tipoSol) : '', p.riego ? '💧 ' + escaparHtml(p.riego) : ''].filter(Boolean).join(' &middot; ')}</p>` : ''}
         ${lineaOrigen ? `<p style="font-size:12px;color:#888;">${lineaOrigen}</p>` : ''}
-        <p class="precio">L. ${p.precio.toFixed(2)} &middot; ${p.stock < 0 ? `<span class="agotado">⚠️ Stock ${p.stock}: se vendió de más</span>` : p.stock <= 0 ? '<span class="agotado">⛔ Agotado</span>' : `<span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span>`}</p>
+        <p class="precio">L. ${(Number(p.precio) || 0).toFixed(2)} &middot; ${p.stock < 0 ? `<span class="agotado">⚠️ Stock ${p.stock}: se vendió de más</span>` : p.stock <= 0 ? '<span class="agotado">⛔ Agotado</span>' : `<span class="${p.stock <= 2 ? 'stock-bajo' : ''}">Stock: ${p.stock}</span>`}</p>
       </div>
     </div>
   `;
@@ -102,10 +125,16 @@ async function refrescarInventario(filtro = '') {
   });
 }
 
+// Escapa texto para insertarlo en la pantalla, también dentro de atributos
+// (value="...", data-...="..."). Evita que un nombre con comillas o etiquetas,
+// o un respaldo manipulado, rompa la pantalla o ejecute código.
 function escaparHtml(texto) {
-  const d = document.createElement('div');
-  d.textContent = texto;
-  return d.innerHTML;
+  return String(texto ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Solo se aceptan fotos guardadas por la propia app (imágenes en base64)
+function srcFotoSegura(foto) {
+  return typeof foto === 'string' && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(foto) ? foto : '';
 }
 
 async function mostrarOpcionesProducto(id) {
@@ -115,17 +144,19 @@ async function mostrarOpcionesProducto(id) {
 
   if ((Number(producto.stock) || 0) <= 0) {
     // Sin existencias: no se ofrece vender
-    const editar = confirm(`⛔ No se puede vender "${producto.nombre}"\n\nNo hay existencias: el stock es 0.\nSi recibiste más, actualiza la cantidad en stock.\n\nAceptar = Editar el producto\nCancelar = Cerrar`);
-    if (editar) abrirModalProducto(producto);
+    const accion = await elegirAccion(producto.nombre, [
+      { id: 'editar', texto: '✏️ Actualizar stock / editar', principal: true },
+    ], '⛔ No se puede vender: no hay existencias (stock 0). Si recibiste más, actualiza la cantidad en stock.');
+    if (accion === 'editar') abrirModalProducto(producto);
     return;
   }
 
-  const accion = confirm(`${producto.nombre}\n\nAceptar = Vender\nCancelar = Editar / Eliminar`);
-  if (accion) {
-    abrirModalVenta(producto);
-  } else {
-    abrirModalProducto(producto);
-  }
+  const accion = await elegirAccion(producto.nombre, [
+    { id: 'vender', texto: '💰 Vender', principal: true },
+    { id: 'editar', texto: '✏️ Editar o eliminar' },
+  ]);
+  if (accion === 'vender') abrirModalVenta(producto);
+  else if (accion === 'editar') abrirModalProducto(producto);
 }
 
 document.getElementById('buscarTexto').addEventListener('input', (e) => refrescarInventario(e.target.value));
@@ -544,7 +575,7 @@ async function manejarSeleccionFotoBusqueda(e) {
 
     resultadosDiv.innerHTML = resultados.map(({ producto, similitud }) => `
       <div class="resultado-visual" data-id="${producto.id}">
-        <img src="${producto.foto || ''}">
+        <img src="${srcFotoSegura(producto.foto)}" alt="">
         <div>${escaparHtml(producto.nombre)}</div>
         <div class="similitud">${Math.round(similitud * 100)}%</div>
       </div>
@@ -583,7 +614,7 @@ async function abrirModalVenta(producto) {
   document.getElementById('campoCantidadVenta').min = 1;
   document.getElementById('campoCantidadVenta').step = 1;
   document.getElementById('campoCantidadVenta').max = producto.stock;
-  document.getElementById('campoPrecioVenta').value = producto.precio.toFixed(2);
+  document.getElementById('campoPrecioVenta').value = (Number(producto.precio) || 0).toFixed(2);
 
   const clientes = await Clientes.listarClientes();
   const select = document.getElementById('campoClienteVenta');
@@ -695,12 +726,12 @@ async function mostrarOpcionesCliente(id) {
   const clientes = await Clientes.listarClientes();
   const cliente = clientes.find((c) => c.id === id);
   if (!cliente) return;
-  const accion = confirm(`${cliente.nombre}\n\nAceptar = Ver historial de compras\nCancelar = Editar / Eliminar`);
-  if (accion) {
-    abrirHistorialCliente(cliente);
-  } else {
-    abrirModalCliente(cliente);
-  }
+  const accion = await elegirAccion(cliente.nombre, [
+    { id: 'historial', texto: '🧾 Ver historial de compras', principal: true },
+    { id: 'editar', texto: '✏️ Editar o eliminar' },
+  ]);
+  if (accion === 'historial') abrirHistorialCliente(cliente);
+  else if (accion === 'editar') abrirModalCliente(cliente);
 }
 
 function abrirModalCliente(cliente = null) {
@@ -902,7 +933,8 @@ document.getElementById('btnImportar').addEventListener('click', () => document.
 document.getElementById('inputImportar').addEventListener('change', async (e) => {
   const archivo = e.target.files[0];
   if (!archivo) return;
-  if (!confirm('Esto reemplazará todos los datos actuales con los del respaldo. ¿Continuar?')) return;
+  e.target.value = ''; // permite volver a elegir el mismo archivo
+  if (!confirm('⚠️ Esto REEMPLAZA todo el inventario, ventas, clientes y proveedores (en todos los celulares) con los datos del respaldo.\n\nAntes se descargará automáticamente una copia de lo que hay ahora.\n\n¿Continuar?')) return;
   try {
     await Backup.importarRespaldoDesdeArchivo(archivo);
     await Catalogo.sincronizarTodo().catch(() => {});
