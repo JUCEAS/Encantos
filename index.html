@@ -274,9 +274,14 @@
     <h2>Datos del catálogo</h2>
     <p class="nota-catalogo" style="margin-top:0">Esto lo ve cualquier persona que abra el catálogo.</p>
 
-    <label>Número de WhatsApp para pedidos</label>
+    <label>Número principal de WhatsApp para pedidos</label>
     <input type="tel" id="cfgWhatsapp" placeholder="Ej: 9876-5432" inputmode="tel">
-    <p class="nota-catalogo">Si es de Honduras, basta con los 8 dígitos. Si es de otro país, escríbelo con su código.</p>
+    <p class="nota-catalogo">Aquí llegan los pedidos de quien abra el catálogo sin enlace de una vendedora (por ejemplo, desde Instagram). Si es de Honduras, basta con los 8 dígitos.</p>
+
+    <label>Vendedoras</label>
+    <p class="nota-catalogo" style="margin-top:0">Cuando una vendedora comparte el catálogo desde su app, los pedidos de esos clientes le llegan a su WhatsApp.</p>
+    <div id="cfgVendedores"></div>
+    <button class="btn chico secundario" id="btnAgregarVendedora" type="button" style="margin-top:8px">+ Agregar vendedora</button>
 
     <label>Nombre del negocio</label>
     <input type="text" id="cfgNegocio" placeholder="Encantos">
