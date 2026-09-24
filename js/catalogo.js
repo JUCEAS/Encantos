@@ -23,6 +23,12 @@ async function guardarConfig(datos) {
     whatsapp: (datos.whatsapp || '').replace(/[^0-9]/g, ''),
     bienvenida: (datos.bienvenida || '').trim(),
     ubicacion: (datos.ubicacion || '').trim(),
+    vendedores: (datos.vendedores || []).map((v) => ({
+      id: v.id,
+      nombre: (v.nombre || '').trim(),
+      whatsapp: (v.whatsapp || '').replace(/[^0-9]/g, ''),
+      correo: (v.correo || '').trim().toLowerCase(),
+    })).filter((v) => v.id && v.nombre),
     actualizadoEl: new Date().toISOString(),
   });
 }
@@ -122,7 +128,17 @@ async function sincronizarTodo() {
   return cambios;
 }
 
+// Identificador corto para el enlace (#v=saira). Solo letras y números.
+function idVendedor(nombre, existentes = []) {
+  const base = (nombre || 'vendedora').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 16) || 'vendedora';
+  let id = base, n = 2;
+  while (existentes.includes(id)) id = base + n++;
+  return id;
+}
+
 window.Catalogo = {
+  idVendedor,
   CONFIG_ID,
   obtenerConfig,
   guardarConfig,
