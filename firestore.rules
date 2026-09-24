@@ -25,6 +25,7 @@ service cloud.firestore {
     match /clientes/{id}    { allow read, write: if esEquipo(); }
     match /ventas/{id}      { allow read, write: if esEquipo(); }
     match /proveedores/{id} { allow read, write: if esEquipo(); }
+    match /ajustes/{id}     { allow read, write: if esEquipo(); }  // correos de vendedoras, etc.
 
     // Catálogo público (se usará en la Fase 3): solo datos pensados para el cliente,
     // nunca costos, ganancias ni datos de clientes.
