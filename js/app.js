@@ -66,6 +66,8 @@ function ocultarModal(id) { document.getElementById(id).classList.remove('activo
 // INVENTARIO
 // =========================================================
 
+let verAgotados = false; // sección de agotados abierta o cerrada
+
 async function refrescarInventario(filtro = '') {
   const contenedor = document.getElementById('listaProductos');
   let productos = filtro ? await Inventario.buscarPorTexto(filtro) : await Inventario.listarProductos();
@@ -74,6 +76,7 @@ async function refrescarInventario(filtro = '') {
   const filtroCat = document.getElementById('filtroCategoria').value;
   if (filtroCat === '__catalogo') productos = productos.filter((p) => p.publicarCatalogo);
   else if (filtroCat === '__no_catalogo') productos = productos.filter((p) => !p.publicarCatalogo);
+  else if (filtroCat === '__agotados') productos = productos.filter((p) => (Number(p.stock) || 0) <= 0);
   else if (filtroCat) productos = productos.filter((p) => p.categoria === filtroCat);
 
   // Aviso si una venta sin internet dejó algún stock en negativo
@@ -96,7 +99,7 @@ async function refrescarInventario(filtro = '') {
   const proveedores = await Proveedores.listarProveedores();
   const mapaProveedores = new Map(proveedores.map((pr) => [pr.id, pr]));
 
-  contenedor.innerHTML = avisoNegativo + productos.map((p) => {
+  const tarjeta = (p) => {
     let lineaOrigen = '';
     if (p.origen === 'Compra a proveedor') {
       const prov = mapaProveedores.get(p.proveedorId);
@@ -118,9 +121,39 @@ async function refrescarInventario(filtro = '') {
       </div>
     </div>
   `;
-  }).join('');
+  };
 
-  contenedor.querySelectorAll('.card').forEach((card) => {
+  // Los agotados van en su propia sección, al final y cerrada, para que no
+  // llenen el inventario. Al buscar por nombre o filtrar "Agotados" se muestran
+  // directamente. Cuando se les pone stock, vuelven solos a la lista principal.
+  const agotado = (p) => (Number(p.stock) || 0) <= 0;
+  const disponibles = productos.filter((p) => !agotado(p));
+  const agotados = productos.filter(agotado);
+  const mostrarJuntos = !!filtro || filtroCat === '__agotados';
+
+  let html = avisoNegativo;
+  if (mostrarJuntos) {
+    html += productos.map(tarjeta).join('');
+  } else {
+    html += disponibles.length
+      ? disponibles.map(tarjeta).join('')
+      : '<div class="vacio">No hay productos con existencias en esta vista.</div>';
+    if (agotados.length) {
+      html += `<button type="button" class="seccion-agotados" id="btnVerAgotados" aria-expanded="${verAgotados}">
+          <span>⛔ Productos agotados (${agotados.length})</span><span class="flecha">${verAgotados ? '▲' : '▼'}</span>
+        </button>`;
+      if (verAgotados) html += `<div class="lista-agotados">${agotados.map(tarjeta).join('')}</div>`;
+    }
+  }
+  contenedor.innerHTML = html;
+
+  const btnAgotados = document.getElementById('btnVerAgotados');
+  if (btnAgotados) btnAgotados.addEventListener('click', () => {
+    verAgotados = !verAgotados;
+    refrescarInventario(document.getElementById('buscarTexto').value);
+  });
+
+  contenedor.querySelectorAll('.card[data-id]').forEach((card) => {
     card.addEventListener('click', () => mostrarOpcionesProducto(card.dataset.id));
   });
 }
@@ -170,6 +203,7 @@ document.getElementById('buscarTexto').addEventListener('input', (e) => refresca
   sel.innerHTML = '<option value="">Todas las categorías</option>' +
     '<option value="__catalogo">🛒 Publicadas en catálogo</option>' +
     '<option value="__no_catalogo">🚫 No publicadas</option>' +
+    '<option value="__agotados">⛔ Agotados</option>' +
     `<optgroup label="Plantas">${plantas.map(opt).join('')}</optgroup>` +
     `<optgroup label="Complementos">${insumos.map(opt).join('')}</optgroup>`;
   sel.addEventListener('change', () => refrescarInventario(document.getElementById('buscarTexto').value));
