@@ -16,13 +16,21 @@ document.querySelectorAll('.tabbar .tab').forEach((btn) => {
 });
 
 function cambiarVista(nombre) {
+  // "Agotados" usa la misma pantalla de Inventario, filtrada solo a los agotados
+  const filtroCat = document.getElementById('filtroCategoria');
+  if (nombre === 'agotados' || (nombre === 'inventario' && filtroCat.value === '__agotados')) {
+    filtroCat.value = nombre === 'agotados' ? '__agotados' : '';
+    document.getElementById('buscarTexto').value = '';
+    window.scrollTo({ top: 0 });
+  }
+  const vista = nombre === 'agotados' ? 'inventario' : nombre;
   document.querySelectorAll('.vista').forEach((v) => v.classList.remove('activa'));
-  document.getElementById('vista-' + nombre).classList.add('activa');
+  document.getElementById('vista-' + vista).classList.add('activa');
   document.querySelectorAll('.tabbar .tab').forEach((b) => b.classList.toggle('activo', b.dataset.vista === nombre));
 
   document.getElementById('btnAgregar').style.display = (nombre === 'inventario' || nombre === 'clientes' || nombre === 'proveedores') ? 'block' : 'none';
 
-  if (nombre === 'inventario') refrescarInventario();
+  if (vista === 'inventario') refrescarInventario();
   if (nombre === 'ventas') refrescarVentas();
   if (nombre === 'clientes') refrescarClientes();
   if (nombre === 'proveedores') refrescarProveedores();
@@ -66,24 +74,21 @@ function ocultarModal(id) { document.getElementById(id).classList.remove('activo
 // INVENTARIO
 // =========================================================
 
-// Botón fijo "⛔ Agotados": siempre a mano, sin tener que recorrer el inventario
+// Pestaña "⛔ Agotados" de la barra de abajo: muestra cuántos hay y se marca
+// cuando se están viendo los agotados (también si se eligen desde el filtro)
 async function actualizarBotonAgotados() {
-  const btn = document.getElementById('btnAgotadosFijo');
-  if (!btn) return;
-  const enModo = document.getElementById('filtroCategoria').value === '__agotados';
+  const insignia = document.getElementById('insigniaAgotados');
+  if (!insignia) return;
   const total = (await Inventario.listarProductos()).filter((p) => (Number(p.stock) || 0) <= 0).length;
-  btn.classList.toggle('volver', enModo);
-  btn.innerHTML = enModo ? '↩ Volver al inventario' : `⛔ Agotados <span class="cuenta">${total}</span>`;
-  btn.style.display = (enModo || total > 0) ? '' : 'none';
+  insignia.textContent = total > 99 ? '99+' : String(total);
+  insignia.hidden = total === 0;
+  if (document.getElementById('vista-inventario').classList.contains('activa')) {
+    const enModo = document.getElementById('filtroCategoria').value === '__agotados';
+    document.querySelector('.tabbar .tab[data-vista="inventario"]').classList.toggle('activo', !enModo);
+    document.getElementById('tabAgotados').classList.toggle('activo', enModo);
+    document.getElementById('btnAgregar').style.display = enModo ? 'none' : 'block';
+  }
 }
-
-document.getElementById('btnAgotadosFijo').addEventListener('click', () => {
-  const sel = document.getElementById('filtroCategoria');
-  sel.value = sel.value === '__agotados' ? '' : '__agotados';
-  document.getElementById('buscarTexto').value = '';
-  refrescarInventario('');
-  window.scrollTo({ top: 0 });
-});
 
 async function refrescarInventario(filtro = '') {
   const contenedor = document.getElementById('listaProductos');
