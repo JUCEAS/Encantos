@@ -1000,8 +1000,31 @@ document.getElementById('inputImportar').addEventListener('change', async (e) =>
 // =========================================================
 
 if ('serviceWorker' in navigator) {
+  // Cuando se publica una versión nueva, la app se recarga sola una vez para
+  // mostrarla (sin tener que cerrarla y abrirla dos veces). Si hay una ventana
+  // abierta (por ejemplo, una venta a medio llenar) espera a que se cierre.
+  const habiaVersion = !!navigator.serviceWorker.controller;
+  let recargaPendiente = false;
+  const recargarSiSePuede = () => {
+    if (!recargaPendiente) return;
+    if (document.querySelector('.modal-overlay.activo')) return;
+    recargaPendiente = false;
+    location.reload();
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!habiaVersion) return; // primera instalación: no hace falta recargar
+    recargaPendiente = true;
+    recargarSiSePuede();
+  });
+  setInterval(recargarSiSePuede, 3000);
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((err) => console.warn('SW no registrado', err));
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      reg.update().catch(() => {});
+      // Al volver a la app (desde WhatsApp, por ejemplo) revisa si hay versión nueva
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch((err) => console.warn('SW no registrado', err));
   });
 }
 
