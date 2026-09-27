@@ -40,7 +40,6 @@
       <button class="btn chico secundario" id="btnDatosCatalogo">⚙️ Datos del catálogo</button>
     </div>
     <div id="listaProductos"><div class="cargando">Cargando inventario...</div></div>
-    <button type="button" class="btn-agotados-fijo" id="btnAgotadosFijo" style="display:none">⛔ Agotados</button>
   </section>
 
   <!-- ================= VENTAS ================= -->
@@ -142,6 +141,7 @@
 
 <nav class="tabbar">
   <button class="tab activo" data-vista="inventario"><span class="emoji">🌱</span>Inventario</button>
+  <button class="tab" data-vista="agotados" id="tabAgotados"><span class="emoji">⛔<span class="insignia" id="insigniaAgotados" hidden></span></span>Agotados</button>
   <button class="tab" data-vista="ventas"><span class="emoji">💰</span>Ventas</button>
   <button class="tab" data-vista="clientes"><span class="emoji">👤</span>Clientes</button>
   <button class="tab" data-vista="proveedores"><span class="emoji">🚚</span>Proveedores</button>
