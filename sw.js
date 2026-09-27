@@ -1,5 +1,5 @@
 // Service Worker de Encantos — habilita el uso 100% sin internet
-const CACHE_NAME = 'encantos-cache-v20';
+const CACHE_NAME = 'encantos-cache-v21';
 const ASSETS = [
   './',
   './index.html',
@@ -34,7 +34,9 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
         ASSETS.map((url) =>
-          cache.add(url).catch((err) => {
+          // cache:'reload' = pedir siempre el archivo nuevo al servidor, nunca una
+          // copia vieja guardada por el navegador
+          cache.add(new Request(url, { cache: 'reload' })).catch((err) => {
             // No detener la instalación si un asset opcional aún no existe
             console.warn('No se pudo cachear', url, err);
           })
