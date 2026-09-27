@@ -56,10 +56,11 @@ nav.tabbar {
 
 nav.tabbar button {
   flex: 1;
-  padding: 10px 4px;
+  min-width: 0;
+  padding: 10px 1px;
   background: none;
   border: none;
-  font-size: 11px;
+  font-size: 10.5px;
   color: #777;
   display: flex;
   flex-direction: column;
@@ -273,23 +274,17 @@ textarea { resize: vertical; min-height: 60px; }
 .menu-acciones .mensaje-accion { margin: 0 0 4px; font-size: 14px; color: var(--rojo); line-height: 1.4; }
 .btn.btn-cancelar { background: transparent; color: #666; border: 1px solid var(--borde); }
 
-/* ---------- Botón fijo de agotados ---------- */
-.btn-agotados-fijo {
-  position: fixed; bottom: 86px; left: 18px; z-index: 9;
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 10px 16px; border-radius: 24px; cursor: pointer;
-  background: #fff; color: var(--rojo); border: 1.5px solid #e8b9b0;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
-  font-size: 14px; font-weight: 700; font-family: inherit;
+/* ---------- Pestaña de agotados ---------- */
+nav.tabbar button .emoji { position: relative; }
+nav.tabbar .insignia {
+  position: absolute; top: -4px; left: 16px;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--rojo); color: #fff; font-size: 10px; font-weight: 700;
+  line-height: 18px; text-align: center; font-style: normal;
 }
-.btn-agotados-fijo .cuenta {
-  background: var(--rojo); color: #fff; border-radius: 10px;
-  padding: 1px 7px; font-size: 12px;
-}
-.btn-agotados-fijo.volver { background: var(--verde); color: #fff; border-color: var(--verde); }
+nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .titulo-agotados {
   margin: 4px 0 10px; padding: 10px 12px; border-radius: 10px;
   background: #f7e1dd; color: var(--rojo); font-weight: 700; font-size: 15px;
 }
 .titulo-agotados small { display: block; font-weight: 400; font-size: 12px; color: #7a4a42; margin-top: 2px; }
-#listaProductos { padding-bottom: 70px; }
