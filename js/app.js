@@ -432,16 +432,22 @@ async function abrirModalCompartir() {
   lista.innerHTML = filas.map((f, i) => `
     <div class="fila-compartir">
       <div class="nom">${escaparHtml(f.titulo)}<br><small>${f.n} ${f.n === 1 ? 'producto' : 'productos'}</small></div>
-      <button class="btn whatsapp" data-i="${i}" data-accion="wa">WhatsApp</button>
+      <button class="btn whatsapp" data-i="${i}" data-accion="wa">📤 Compartir</button>
       <button class="btn secundario" data-i="${i}" data-accion="ver">Ver</button>
     </div>`).join('');
 
-  lista.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+  lista.querySelectorAll('button').forEach((b) => b.addEventListener('click', async () => {
     const f = filas[Number(b.dataset.i)];
     if (b.dataset.accion === 'ver') { window.open(f.url, '_blank', 'noopener'); return; }
     const texto = f.id
       ? `🌿 Mira nuestras plantas de *${f.titulo.replace(/^\S+\s/, '')}* en ${negocio}: fotos, precios y cuidados.\n${f.url}`
       : `🌿 Este es el catálogo de ${negocio}: fotos, precios y cuidados de cada planta. Puedes hacer tu pedido desde ahí.\n${f.url}`;
+    // Menú "Compartir" del teléfono: deja elegir WhatsApp, WhatsApp Business,
+    // Messenger, etc. (un enlace wa.me siempre abre la app predeterminada).
+    if (navigator.share) {
+      try { await navigator.share({ text: texto }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
     window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
   }));
 }
