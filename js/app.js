@@ -66,10 +66,28 @@ function ocultarModal(id) { document.getElementById(id).classList.remove('activo
 // INVENTARIO
 // =========================================================
 
-let verAgotados = false; // sección de agotados abierta o cerrada
+// Botón fijo "⛔ Agotados": siempre a mano, sin tener que recorrer el inventario
+async function actualizarBotonAgotados() {
+  const btn = document.getElementById('btnAgotadosFijo');
+  if (!btn) return;
+  const enModo = document.getElementById('filtroCategoria').value === '__agotados';
+  const total = (await Inventario.listarProductos()).filter((p) => (Number(p.stock) || 0) <= 0).length;
+  btn.classList.toggle('volver', enModo);
+  btn.innerHTML = enModo ? '↩ Volver al inventario' : `⛔ Agotados <span class="cuenta">${total}</span>`;
+  btn.style.display = (enModo || total > 0) ? '' : 'none';
+}
+
+document.getElementById('btnAgotadosFijo').addEventListener('click', () => {
+  const sel = document.getElementById('filtroCategoria');
+  sel.value = sel.value === '__agotados' ? '' : '__agotados';
+  document.getElementById('buscarTexto').value = '';
+  refrescarInventario('');
+  window.scrollTo({ top: 0 });
+});
 
 async function refrescarInventario(filtro = '') {
   const contenedor = document.getElementById('listaProductos');
+  actualizarBotonAgotados();
   let productos = filtro ? await Inventario.buscarPorTexto(filtro) : await Inventario.listarProductos();
   const hayProductos = productos.length > 0;
 
@@ -123,35 +141,24 @@ async function refrescarInventario(filtro = '') {
   `;
   };
 
-  // Los agotados van en su propia sección, al final y cerrada, para que no
-  // llenen el inventario. Al buscar por nombre o filtrar "Agotados" se muestran
-  // directamente. Cuando se les pone stock, vuelven solos a la lista principal.
+  // Los agotados no ocupan la lista principal. Se ven con el botón fijo
+  // "⛔ Agotados" (abajo, a la izquierda), al buscar por nombre o con el filtro.
+  // Cuando se les pone stock, vuelven solos a la lista principal.
   const agotado = (p) => (Number(p.stock) || 0) <= 0;
-  const disponibles = productos.filter((p) => !agotado(p));
-  const agotados = productos.filter(agotado);
-  const mostrarJuntos = !!filtro || filtroCat === '__agotados';
-
+  const enModoAgotados = filtroCat === '__agotados';
   let html = avisoNegativo;
-  if (mostrarJuntos) {
+  if (enModoAgotados) {
+    html += '<div class="titulo-agotados">⛔ Productos agotados <small>Ponles inventario y regresan solos a la lista principal.</small></div>';
+    html += productos.map(tarjeta).join('');
+  } else if (filtro) {
     html += productos.map(tarjeta).join('');
   } else {
+    const disponibles = productos.filter((p) => !agotado(p));
     html += disponibles.length
       ? disponibles.map(tarjeta).join('')
       : '<div class="vacio">No hay productos con existencias en esta vista.</div>';
-    if (agotados.length) {
-      html += `<button type="button" class="seccion-agotados" id="btnVerAgotados" aria-expanded="${verAgotados}">
-          <span>⛔ Productos agotados (${agotados.length})</span><span class="flecha">${verAgotados ? '▲' : '▼'}</span>
-        </button>`;
-      if (verAgotados) html += `<div class="lista-agotados">${agotados.map(tarjeta).join('')}</div>`;
-    }
   }
   contenedor.innerHTML = html;
-
-  const btnAgotados = document.getElementById('btnVerAgotados');
-  if (btnAgotados) btnAgotados.addEventListener('click', () => {
-    verAgotados = !verAgotados;
-    refrescarInventario(document.getElementById('buscarTexto').value);
-  });
 
   contenedor.querySelectorAll('.card[data-id]').forEach((card) => {
     card.addEventListener('click', () => mostrarOpcionesProducto(card.dataset.id));
