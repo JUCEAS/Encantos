@@ -300,7 +300,16 @@ nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .nota-anulada { font-size: 12px; color: var(--rojo); }
 
 /* ---------- Resumen del mes (Ventas) ---------- */
-.titulo-mes { font-size: 13px; font-weight: 700; color: #555; margin: 2px 0 6px; }
+.selector-mes { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; }
+.selector-mes .nombre-mes {
+  flex: 1; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--borde);
+  background: #fff; font-family: inherit; font-size: 15px; font-weight: 700; color: var(--verde); cursor: pointer;
+}
+.selector-mes .flecha-mes {
+  width: 40px; height: 38px; border-radius: 10px; border: 1px solid var(--borde);
+  background: #fff; color: var(--verde); font-size: 15px; cursor: pointer;
+}
+.selector-mes .flecha-mes:disabled { opacity: 0.3; cursor: default; }
 .resumen-grid.tres { gap: 8px; margin-bottom: 4px; }
 .resumen-grid.tres .card { padding: 10px 6px; }
 .resumen-grid.tres .valor { font-size: 16px; }
