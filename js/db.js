@@ -150,7 +150,8 @@ async function anularVentaEnTransaccion(ventaId, datosAnulacion) {
     let snapProducto = null;
     const refProducto = venta.productoId ? coleccion(STORES.productos).doc(venta.productoId) : null;
     if (refProducto) snapProducto = await tx.get(refProducto);
-    if (snapProducto && snapProducto.exists) {
+    // Si la planta no regresa (dañada, no la devolvieron), no se suma al stock
+    if (snapProducto && snapProducto.exists && datosAnulacion.regresoInventario !== false) {
       const stock = Number(snapProducto.data().stock) || 0;
       tx.update(refProducto, { stock: stock + (Number(venta.cantidad) || 0) });
     }
@@ -375,6 +376,45 @@ async function anularFacturaCompra(compraId, datosAnulacion, calcularCosto, enLi
   });
 }
 
+// Corrige una venta (cantidad, precio, cliente): ajusta el stock solo por la
+// diferencia, guarda la venta corregida y deja la original como historial.
+// La ganancia se calcula con el costo que tenía la planta el día de la venta.
+async function corregirVentaEnTransaccion(ventaId, cambios, datosCorreccion, enLinea) {
+  const refOriginal = coleccion(STORES.ventas).doc(ventaId);
+  const refNueva = coleccion(STORES.ventas).doc();
+  return ejecutarOperacion(enLinea, async (leer, escribir) => {
+    const snapV = await leer(refOriginal);
+    if (!snapV.exists) throw errorCon('no-existe');
+    const venta = snapV.data();
+    if (venta.anulada) throw errorCon('ya-anulada');
+    if (venta.corregida) throw errorCon('ya-corregida');
+    const refProducto = venta.productoId ? coleccion(STORES.productos).doc(venta.productoId) : null;
+    const snapP = refProducto ? await leer(refProducto) : null;
+    const diferencia = cambios.cantidad - (Number(venta.cantidad) || 0);
+    if (snapP && snapP.exists) {
+      const stock = Number(snapP.data().stock) || 0;
+      if (diferencia > stock) throw errorCon('sin-stock', { stock });
+      if (diferencia !== 0) escribir.update(refProducto, { stock: stock - diferencia });
+    } else if (diferencia !== 0) {
+      throw errorCon('producto-no-existe');
+    }
+    const costo = Number(venta.costoUnitario) || 0;
+    const nueva = {
+      ...venta,
+      cantidad: cambios.cantidad,
+      precioUnitario: cambios.precioUnitario,
+      clienteId: cambios.clienteId || null,
+      total: Math.round(cambios.precioUnitario * cambios.cantidad * 100) / 100,
+      ganancia: Math.round((cambios.precioUnitario - costo) * cambios.cantidad * 100) / 100,
+      corrigeA: ventaId,
+      registradaEl: datosCorreccion.corregidaEl,
+    };
+    escribir.set(refNueva, nueva);
+    escribir.update(refOriginal, { corregida: true, reemplazadaPor: refNueva.id, ...datosCorreccion });
+    return { id: refNueva.id, ...nueva, productoExiste: !!(snapP && snapP.exists) };
+  });
+}
+
 // Solo se guarda "sin internet" cuando el error es de conexión. Cualquier otro
 // error (por ejemplo, falta de permiso) se muestra, para no dar algo por guardado.
 function esErrorDeConexion(err) {
@@ -499,6 +539,7 @@ window.DB = {
   incrementarCampo,
   venderEnTransaccion,
   anularVentaEnTransaccion,
+  corregirVentaEnTransaccion,
   comprarEnTransaccion,
   anularCompraEnTransaccion,
   guardarFacturaCompra,
