@@ -118,6 +118,28 @@ function unidadesDe(c) { return lineasDe(c).reduce((s, l) => s + (Number(l.canti
 
 const MAX_LINEAS = 200;
 
+// Motivos para anular una compra (los más comunes en viveros)
+const MOTIVOS_ANULAR_COMPRA = [
+  { id: 'enfermas', texto: '🦠 Las plantas llegaron enfermas o con plagas' },
+  { id: 'danadas', texto: '🥀 Llegaron dañadas en el transporte (rotas, secas, maltratadas)' },
+  { id: 'equivocadas', texto: '🔀 No eran las plantas que se pidieron (especie o variedad)' },
+  { id: 'calidad', texto: '📏 Tamaño o calidad distinta a lo acordado' },
+  { id: 'muertas', texto: '🍂 Llegaron muertas o murieron a los pocos días' },
+  { id: 'no-entrego', texto: '🚫 El proveedor no entregó el pedido' },
+  { id: 'devuelta', texto: '↩️ Se devolvió la compra al proveedor' },
+  { id: 'duplicada', texto: '📑 Factura duplicada (se registró dos veces)' },
+  { id: 'error', texto: '✍️ Error al registrar' },
+  { id: 'otro', texto: '📝 Otro motivo' },
+];
+
+function datosAnulacionCompra(opciones = {}) {
+  const motivo = MOTIVOS_ANULAR_COMPRA.find((m) => m.id === opciones.motivo);
+  if (!motivo) throw new Error('Elige el motivo de la anulación.');
+  const nota = String(opciones.nota || '').trim().slice(0, 300);
+  if (motivo.id === 'otro' && !nota) throw new Error('Escribe en la nota cuál fue el motivo.');
+  return { anuladaEl: new Date().toISOString(), anuladaPor: usuarioActual(), motivoAnulacion: motivo.texto, notaAnulacion: nota };
+}
+
 // datos = { proveedorId, fecha, numeroFactura, nota, transporte,
 //           lineas: [{ productoId | null, nombre, cantidad, costoUnitario, nuevo: { categoria, precio } }] }
 // Valida los datos del formulario y arma la factura (sin guardarla)
@@ -237,8 +259,8 @@ async function corregirFactura(idOriginal, datos) {
   return r;
 }
 
-async function anularFactura(id) {
-  const datos = { anuladaEl: new Date().toISOString(), anuladaPor: usuarioActual() };
+async function anularFactura(id, opciones = {}) {
+  const datos = datosAnulacionCompra(opciones);
   const traducir = (err) => {
     if (err.code === 'ya-anulada') return new Error('Esta compra ya estaba anulada (quizás desde el otro celular).');
     if (err.code === 'no-existe') return new Error('Esta compra ya no existe.');
@@ -268,8 +290,8 @@ async function listarCompras({ desde = null, hasta = null, incluirAnuladas = fal
 
 // Anula una compra: la marca como anulada (no se borra), quita las unidades
 // del stock y saca esa compra del costo promedio.
-async function anularCompra(id) {
-  const datos = { anuladaEl: new Date().toISOString(), anuladaPor: usuarioActual() };
+async function anularCompra(id, opciones = {}) {
+  const datos = datosAnulacionCompra(opciones);
   if (navigator.onLine) {
     try {
       const r = await DB.anularCompraEnTransaccion(id, datos, costoSinCompra);
@@ -306,6 +328,7 @@ async function totalComprado({ desde = null, hasta = null } = {}) {
 
 window.Compras = {
   MAX_LINEAS,
+  MOTIVOS_ANULAR_COMPRA,
   registrarFactura,
   corregirFactura,
   anularFactura,
