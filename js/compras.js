@@ -83,6 +83,146 @@ async function registrarCompra(datos) {
   return registro;
 }
 
+// ---------- Facturas (varios productos + transporte) ----------
+
+// Reparte el transporte entre los productos SEGÚN SU VALOR: si una planta es
+// el 60% del valor de la factura, le toca el 60% del transporte. Si todo vino
+// a costo 0, se reparte por unidades. El resultado es el costo final por
+// unidad, que es el que entra al costo promedio y a la ganancia.
+function repartirTransporte(lineas, transporte) {
+  const t = Math.max(0, Number(transporte) || 0);
+  const valor = lineas.reduce((s, l) => s + l.cantidad * l.costoUnitario, 0);
+  const unidades = lineas.reduce((s, l) => s + l.cantidad, 0);
+  return lineas.map((l) => {
+    const subtotal = l.cantidad * l.costoUnitario;
+    const parte = t > 0 ? (valor > 0 ? (t * subtotal) / valor : (t * l.cantidad) / (unidades || 1)) : 0;
+    return {
+      ...l,
+      subtotal: redondear(subtotal),
+      transporte: redondear(parte),
+      costoFinalUnit: redondear(l.costoUnitario + (l.cantidad ? parte / l.cantidad : 0)),
+    };
+  });
+}
+
+// Una compra vieja (un solo producto) se ve como una factura de una línea.
+function lineasDe(c) {
+  if (Array.isArray(c.lineas)) return c.lineas;
+  return [{
+    productoId: c.productoId, nombreProducto: c.nombreProducto, cantidad: Number(c.cantidad) || 0,
+    costoUnitario: Number(c.costoUnitario) || 0, transporte: 0, costoFinalUnit: Number(c.costoUnitario) || 0,
+    subtotal: Number(c.total) || 0,
+  }];
+}
+function unidadesDe(c) { return lineasDe(c).reduce((s, l) => s + (Number(l.cantidad) || 0), 0); }
+
+const MAX_LINEAS = 200;
+
+// datos = { proveedorId, fecha, numeroFactura, nota, transporte,
+//           lineas: [{ productoId | null, nombre, cantidad, costoUnitario, nuevo: { categoria, precio } }] }
+async function registrarFactura(datos) {
+  const filas = datos.lineas || [];
+  if (!filas.length) throw new Error('Agrega al menos un producto a la factura.');
+  if (filas.length > MAX_LINEAS) throw new Error(`Una factura puede tener hasta ${MAX_LINEAS} productos. Divídela en dos.`);
+  const transporte = Number(String(datos.transporte ?? '').trim() || 0);
+  if (!Number.isFinite(transporte) || transporte < 0) throw new Error('El costo de transporte no es válido.');
+
+  const productos = await DB.obtenerTodos(DB.STORES.productos);
+  const porId = new Map(productos.map((p) => [p.id, p]));
+  const vistos = new Map();
+  const lineas = filas.map((f, i) => {
+    const n = i + 1;
+    const nombre = String(f.nombre || '').trim();
+    const producto = f.productoId ? porId.get(f.productoId) : null;
+    if (f.productoId && !producto) throw new Error(`Fila ${n}: ese producto ya no existe en el inventario.`);
+    if (!producto && !nombre) throw new Error(`Fila ${n}: escribe el nombre de la planta o producto.`);
+    const cantidad = Number(String(f.cantidad ?? '').trim());
+    if (!Number.isInteger(cantidad) || cantidad < 1) throw new Error(`Fila ${n}: la cantidad debe ser un número entero, mayor o igual a 1.`);
+    const costoTxt = String(f.costoUnitario ?? '').trim();
+    const costoUnitario = Number(costoTxt);
+    if (costoTxt === '' || !Number.isFinite(costoUnitario) || costoUnitario < 0) throw new Error(`Fila ${n}: escribe el costo por unidad (puede ser 0).`);
+    const clave = producto ? 'id:' + producto.id : 'nuevo:' + nombre.toLowerCase();
+    if (vistos.has(clave)) throw new Error(`"${producto ? producto.nombre : nombre}" está repetido en las filas ${vistos.get(clave)} y ${n}. Suma las cantidades en una sola fila.`);
+    vistos.set(clave, n);
+    let nuevoProducto = null;
+    if (!producto) {
+      const categoria = f.nuevo && f.nuevo.categoria;
+      if (!categoria || !Inventario.CATEGORIAS.includes(categoria)) throw new Error(`Fila ${n}: "${nombre}" es nuevo. Elige su categoría.`);
+      const precio = Number(String((f.nuevo && f.nuevo.precio) ?? '').trim() || 0);
+      if (!Number.isFinite(precio) || precio < 0) throw new Error(`Fila ${n}: el precio de venta no es válido.`);
+      nuevoProducto = {
+        nombre, categoria, descripcion: '', nombreCientifico: '', tipoSol: '', riego: '', ubicacion: '',
+        dificultad: '', mascotas: '', tamanoMaceta: '', tamanoAdulto: '', etiquetas: [], publicarCatalogo: false,
+        origen: datos.proveedorId ? 'Compra a proveedor' : '', proveedorId: datos.proveedorId || null,
+        precio: redondear(precio), foto: null, embedding: null, creadoEl: new Date().toISOString(),
+      };
+    }
+    return {
+      productoId: producto ? producto.id : null,
+      nombreProducto: producto ? producto.nombre : nombre,
+      cantidad,
+      costoUnitario: redondear(costoUnitario),
+      nuevoProducto,
+    };
+  });
+
+  let proveedor = null;
+  if (datos.proveedorId) proveedor = await DB.obtener(DB.STORES.proveedores, datos.proveedorId);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const dia = /^\d{4}-\d{2}-\d{2}$/.test(datos.fecha || '') ? datos.fecha : hoy;
+
+  const conTransporte = repartirTransporte(lineas, transporte);
+  const totalProductos = redondear(conTransporte.reduce((s, l) => s + l.subtotal, 0));
+  const factura = {
+    tipo: 'factura',
+    proveedorId: proveedor ? proveedor.id : null,
+    nombreProveedor: proveedor ? proveedor.nombre : '',
+    numeroFactura: String(datos.numeroFactura || '').trim().slice(0, 40),
+    nota: String(datos.nota || '').trim().slice(0, 200),
+    fecha: new Date(dia + 'T12:00:00').toISOString(),
+    transporte: redondear(transporte),
+    totalProductos,
+    total: redondear(totalProductos + transporte),
+    unidades: conTransporte.reduce((s, l) => s + l.cantidad, 0),
+    lineas: conTransporte,
+    registradaEl: new Date().toISOString(),
+    registradaPor: usuarioActual(),
+  };
+
+  let resultado;
+  try {
+    resultado = await DB.guardarFacturaCompra(factura, costoPromedio, navigator.onLine);
+  } catch (err) {
+    if (err.code === 'no-existe') throw new Error(`"${err.nombre}" ya no existe en el inventario. Revisa esa fila.`);
+    if (!navigator.onLine || !DB.esErrorDeConexion(err)) throw new Error(DB.mensajeDeError(err));
+    console.warn('Factura sin conexión: se guarda en el teléfono', err);
+    resultado = await DB.guardarFacturaCompra(factura, costoPromedio, false);
+  }
+  resultado.lineas.forEach((l) => {
+    if (!l.creadoEnFactura) Catalogo.actualizarDisponibilidad(l.productoId).catch((e) => console.warn('Catálogo no sincronizado', e));
+  });
+  return resultado;
+}
+
+async function anularFactura(id) {
+  const datos = { anuladaEl: new Date().toISOString(), anuladaPor: usuarioActual() };
+  const traducir = (err) => {
+    if (err.code === 'ya-anulada') return new Error('Esta compra ya estaba anulada (quizás desde el otro celular).');
+    if (err.code === 'no-existe') return new Error('Esta compra ya no existe.');
+    if (err.code === 'stock-insuficiente') return new Error(`No se puede anular: ya se vendieron unidades de esta factura:\n• ${err.detalle.join('\n• ')}\nSi hubo un error, corrige el stock editando esos productos.`);
+    return new Error(DB.mensajeDeError(err));
+  };
+  let r;
+  try {
+    r = await DB.anularFacturaCompra(id, datos, costoSinCompra, navigator.onLine);
+  } catch (err) {
+    if (!navigator.onLine || !DB.esErrorDeConexion(err) || ['ya-anulada', 'no-existe', 'stock-insuficiente'].includes(err.code)) throw traducir(err);
+    try { r = await DB.anularFacturaCompra(id, datos, costoSinCompra, false); } catch (e2) { throw traducir(e2); }
+  }
+  r.productosAfectados.forEach((pid) => Catalogo.actualizarDisponibilidad(pid).catch((e) => console.warn(e)));
+  return r;
+}
+
 async function listarCompras({ desde = null, hasta = null, incluirAnuladas = false } = {}) {
   let compras = await DB.obtenerTodos(DB.STORES.compras);
   if (!incluirAnuladas) compras = compras.filter((c) => !c.anulada);
@@ -131,6 +271,12 @@ async function totalComprado({ desde = null, hasta = null } = {}) {
 }
 
 window.Compras = {
+  MAX_LINEAS,
+  registrarFactura,
+  anularFactura,
+  repartirTransporte,
+  lineasDe,
+  unidadesDe,
   registrarCompra,
   listarCompras,
   anularCompra,
