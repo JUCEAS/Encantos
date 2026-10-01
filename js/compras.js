@@ -111,7 +111,7 @@ function lineasDe(c) {
   return [{
     productoId: c.productoId, nombreProducto: c.nombreProducto, cantidad: Number(c.cantidad) || 0,
     costoUnitario: Number(c.costoUnitario) || 0, transporte: 0, costoFinalUnit: Number(c.costoUnitario) || 0,
-    subtotal: Number(c.total) || 0,
+    subtotal: Number(c.total) || 0, stockAnterior: c.stockAnterior, costoAnterior: c.costoAnterior,
   }];
 }
 function unidadesDe(c) { return lineasDe(c).reduce((s, l) => s + (Number(l.cantidad) || 0), 0); }
@@ -120,7 +120,8 @@ const MAX_LINEAS = 200;
 
 // datos = { proveedorId, fecha, numeroFactura, nota, transporte,
 //           lineas: [{ productoId | null, nombre, cantidad, costoUnitario, nuevo: { categoria, precio } }] }
-async function registrarFactura(datos) {
+// Valida los datos del formulario y arma la factura (sin guardarla)
+async function prepararFactura(datos) {
   const filas = datos.lineas || [];
   if (!filas.length) throw new Error('Agrega al menos un producto a la factura.');
   if (filas.length > MAX_LINEAS) throw new Error(`Una factura puede tener hasta ${MAX_LINEAS} productos. Divídela en dos.`);
@@ -189,6 +190,11 @@ async function registrarFactura(datos) {
     registradaPor: usuarioActual(),
   };
 
+  return factura;
+}
+
+async function registrarFactura(datos) {
+  const factura = await prepararFactura(datos);
   let resultado;
   try {
     resultado = await DB.guardarFacturaCompra(factura, costoPromedio, navigator.onLine);
@@ -202,6 +208,33 @@ async function registrarFactura(datos) {
     if (!l.creadoEnFactura) Catalogo.actualizarDisponibilidad(l.productoId).catch((e) => console.warn('Catálogo no sincronizado', e));
   });
   return resultado;
+}
+
+// Corrige una compra ya guardada: deshace la original y guarda la corregida.
+async function corregirFactura(idOriginal, datos) {
+  const factura = await prepararFactura(datos);
+  const fn = {
+    costoPromedio,
+    costoSinCompra,
+    normalizar: lineasDe,
+    datosCorreccion: { corregidaEl: new Date().toISOString(), corregidaPor: usuarioActual() },
+  };
+  const traducir = (err) => {
+    if (err.code === 'ya-anulada') return new Error('Esta compra fue anulada; ya no se puede corregir.');
+    if (err.code === 'ya-corregida') return new Error('Esta compra ya fue corregida (quizás desde el otro celular). Corrige la versión nueva.');
+    if (err.code === 'no-existe') return new Error(err.nombre ? `"${err.nombre}" ya no existe en el inventario. Revisa esa fila.` : 'Esta compra ya no existe.');
+    if (err.code === 'stock-insuficiente') return new Error(`No se puede guardar la corrección: el stock quedaría en negativo porque ya se vendieron unidades:\n• ${err.detalle.join('\n• ')}\nRevisa esas cantidades.`);
+    return new Error(DB.mensajeDeError(err));
+  };
+  let r;
+  try {
+    r = await DB.corregirFacturaCompra(idOriginal, factura, fn, navigator.onLine);
+  } catch (err) {
+    if (!navigator.onLine || !DB.esErrorDeConexion(err) || ['ya-anulada', 'ya-corregida', 'no-existe', 'stock-insuficiente'].includes(err.code)) throw traducir(err);
+    try { r = await DB.corregirFacturaCompra(idOriginal, factura, fn, false); } catch (e2) { throw traducir(e2); }
+  }
+  r.productosAfectados.forEach((pid) => Catalogo.actualizarDisponibilidad(pid).catch((e) => console.warn(e)));
+  return r;
 }
 
 async function anularFactura(id) {
@@ -225,7 +258,8 @@ async function anularFactura(id) {
 
 async function listarCompras({ desde = null, hasta = null, incluirAnuladas = false } = {}) {
   let compras = await DB.obtenerTodos(DB.STORES.compras);
-  if (!incluirAnuladas) compras = compras.filter((c) => !c.anulada);
+  // Anuladas y corregidas se conservan como historial, pero no cuentan
+  if (!incluirAnuladas) compras = compras.filter((c) => !c.anulada && !c.corregida);
   if (desde) compras = compras.filter((c) => new Date(c.fecha) >= new Date(desde + 'T00:00:00'));
   if (hasta) compras = compras.filter((c) => new Date(c.fecha) <= new Date(hasta + 'T23:59:59.999'));
   compras.sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || new Date(b.registradaEl) - new Date(a.registradaEl));
@@ -273,6 +307,7 @@ async function totalComprado({ desde = null, hasta = null } = {}) {
 window.Compras = {
   MAX_LINEAS,
   registrarFactura,
+  corregirFactura,
   anularFactura,
   repartirTransporte,
   lineasDe,
