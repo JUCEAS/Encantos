@@ -366,25 +366,29 @@
 
 <!-- ============ MODAL: Venta ============ -->
 <div class="modal-overlay" id="modalCompra">
-  <div class="modal">
-    <h2>🛒 Registrar compra</h2>
-    <label>Producto que compraste</label>
-    <select id="campoProductoCompra"></select>
-    <p class="nota-envio">¿Es un producto nuevo? Primero agrégalo en Inventario con el botón "+", con stock 0, y luego registra aquí la compra.</p>
-    <label>Proveedor (opcional)</label>
+  <div class="modal modal-factura">
+    <h2>🧾 Registrar compra (factura)</h2>
+    <label>Proveedor</label>
     <select id="campoProveedorCompra"></select>
-    <label>Cantidad</label>
-    <input type="number" id="campoCantidadCompra" min="1" step="1" value="1" inputmode="numeric">
-    <label>Costo por unidad (L.)</label>
-    <input type="number" id="campoCostoCompra" min="0" step="0.01" inputmode="decimal">
-    <label>Fecha de la compra</label>
-    <input type="date" id="campoFechaCompra">
+    <div class="fila-dos">
+      <label>Fecha<input type="date" id="campoFechaCompra"></label>
+      <label>N.º de factura<input type="text" id="campoNumeroFactura" maxlength="40" placeholder="Opcional"></label>
+    </div>
+    <label>¿Cuántos productos trae la factura?</label>
+    <input type="number" id="campoNumLineas" min="1" max="200" step="1" inputmode="numeric" value="1">
+    <p class="nota-envio">Escribe el nombre en cada fila. Si no existe en el inventario, se crea al guardar.</p>
+    <div id="lineasFactura"></div>
+    <button type="button" class="btn secundario" id="btnAgregarLinea">➕ Agregar producto</button>
+    <label>Costo de transporte (L.)</label>
+    <input type="number" id="campoTransporte" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+    <p class="nota-envio">El transporte se reparte entre los productos según su valor y se suma a su costo.</p>
     <label>Nota (opcional)</label>
-    <input type="text" id="campoNotaCompra" maxlength="200" placeholder="Ej.: factura 123, vivero de Comayagua">
-    <div class="vista-previa-compra" id="previaCompra"></div>
+    <input type="text" id="campoNotaCompra" maxlength="200" placeholder="Ej.: vivero de Comayagua">
+    <div class="resumen-factura" id="resumenFactura"></div>
+    <datalist id="listaProductosCompra"></datalist>
     <div class="fila-botones">
-      <button class="btn secundario" id="btnCancelarCompra">Cancelar</button>
-      <button class="btn" id="btnConfirmarCompra">Guardar compra</button>
+      <button class="btn secundario" id="btnCancelarCompra">Cerrar</button>
+      <button class="btn" id="btnConfirmarCompra">Guardar factura</button>
     </div>
   </div>
 </div>
