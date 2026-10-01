@@ -210,6 +210,98 @@ async function anularCompraEnTransaccion(compraId, datosAnulacion, calcularCosto
   return resultado;
 }
 
+// Ejecuta una operación de varios documentos de una sola vez.
+// Con internet: transacción (lee el stock real de la nube; todo o nada).
+// Sin internet: lee lo guardado en el teléfono y escribe en un lote que se
+// sube completo al volver la señal (no se espera, para no trabar la pantalla).
+async function ejecutarOperacion(enLinea, fn) {
+  await authReady;
+  if (enLinea) {
+    let resultado;
+    await firestoreDB.runTransaction(async (tx) => {
+      resultado = await fn((ref) => tx.get(ref), tx);
+    });
+    return resultado;
+  }
+  const lote = firestoreDB.batch();
+  const resultado = await fn((ref) => ref.get(), lote);
+  lote.commit().catch((e) => console.warn('La compra se subirá al volver la señal', e));
+  return resultado;
+}
+
+function errorCon(code, extra = {}) {
+  return Object.assign(new Error(code), { code }, extra);
+}
+
+// Factura de compra: varios productos, con o sin productos nuevos.
+// factura.lineas = [{ productoId | null, nuevoProducto | null, cantidad, costoFinalUnit, ... }]
+async function guardarFacturaCompra(factura, calcularCosto, enLinea) {
+  const refFactura = coleccion(STORES.compras).doc();
+  const refs = factura.lineas.map((l) => (l.productoId ? coleccion(STORES.productos).doc(l.productoId) : coleccion(STORES.productos).doc()));
+  return ejecutarOperacion(enLinea, async (leer, escribir) => {
+    // 1) Primero todas las lecturas
+    const snaps = await Promise.all(factura.lineas.map((l, i) => (l.nuevoProducto ? null : leer(refs[i]))));
+    // 2) Después todas las escrituras
+    const lineas = factura.lineas.map((l, i) => {
+      const { nuevoProducto, ...linea } = l;
+      if (nuevoProducto) {
+        escribir.set(refs[i], { ...nuevoProducto, stock: l.cantidad, costo: l.costoFinalUnit });
+        return { ...linea, productoId: refs[i].id, creadoEnFactura: true, stockAnterior: 0, costoAnterior: 0, costoNuevo: l.costoFinalUnit };
+      }
+      const snap = snaps[i];
+      if (!snap || !snap.exists) throw errorCon('no-existe', { nombre: l.nombreProducto });
+      const p = snap.data();
+      const stockAnterior = Number(p.stock) || 0;
+      const costoAnterior = Number(p.costo) || 0;
+      const costoNuevo = calcularCosto(stockAnterior, costoAnterior, l.cantidad, l.costoFinalUnit);
+      const cambios = { stock: stockAnterior + l.cantidad, costo: costoNuevo };
+      if (factura.proveedorId && !p.proveedorId) { cambios.proveedorId = factura.proveedorId; cambios.origen = 'Compra a proveedor'; }
+      escribir.update(refs[i], cambios);
+      return { ...linea, productoId: refs[i].id, stockAnterior, costoAnterior, costoNuevo };
+    });
+    const registro = { ...factura, lineas };
+    escribir.set(refFactura, registro);
+    return { id: refFactura.id, ...registro };
+  });
+}
+
+// Anula una factura completa: quita las unidades de cada producto y saca la
+// factura del costo promedio. Si ya se vendieron unidades, no se permite.
+async function anularFacturaCompra(compraId, datosAnulacion, calcularCosto, enLinea) {
+  const refFactura = coleccion(STORES.compras).doc(compraId);
+  return ejecutarOperacion(enLinea, async (leer, escribir) => {
+    const snapF = await leer(refFactura);
+    if (!snapF.exists) throw errorCon('no-existe');
+    const factura = snapF.data();
+    if (factura.anulada) throw errorCon('ya-anulada');
+    const lineas = factura.lineas || [];
+    const refs = lineas.map((l) => coleccion(STORES.productos).doc(l.productoId));
+    const snaps = await Promise.all(refs.map((r) => leer(r)));
+    const faltan = [];
+    lineas.forEach((l, i) => {
+      const s = snaps[i];
+      if (s && s.exists && (Number(s.data().stock) || 0) < l.cantidad) faltan.push(`${l.nombreProducto} (quedan ${Number(s.data().stock) || 0} de ${l.cantidad})`);
+    });
+    if (faltan.length) throw errorCon('stock-insuficiente', { detalle: faltan });
+    const productosAfectados = [];
+    lineas.forEach((l, i) => {
+      const s = snaps[i];
+      if (!s || !s.exists) return;
+      const p = s.data();
+      const stock = Number(p.stock) || 0;
+      const costoBase = l.creadoEnFactura ? l.costoFinalUnit : l.costoAnterior;
+      // Si no hubo otros movimientos desde la compra, se vuelve exactamente al costo de antes
+      const costo = stock - l.cantidad === Number(l.stockAnterior) && !l.creadoEnFactura
+        ? Number(l.costoAnterior) || 0
+        : calcularCosto(stock, p.costo, l.cantidad, l.costoFinalUnit, costoBase);
+      escribir.update(refs[i], { stock: stock - l.cantidad, costo });
+      productosAfectados.push(l.productoId);
+    });
+    escribir.update(refFactura, { anulada: true, ...datosAnulacion });
+    return { productosAfectados };
+  });
+}
+
 // Solo se guarda "sin internet" cuando el error es de conexión. Cualquier otro
 // error (por ejemplo, falta de permiso) se muestra, para no dar algo por guardado.
 function esErrorDeConexion(err) {
@@ -336,6 +428,8 @@ window.DB = {
   anularVentaEnTransaccion,
   comprarEnTransaccion,
   anularCompraEnTransaccion,
+  guardarFacturaCompra,
+  anularFacturaCompra,
   esErrorDeConexion,
   mensajeDeError,
   eliminar,
