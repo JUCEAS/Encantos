@@ -719,14 +719,18 @@ async function refrescarVentas() {
   const ventasHoy = ventas.filter((v) => !v.anulada && new Date(v.fecha).toDateString() === hoy);
   document.getElementById('resumenTotalHoy').textContent = 'L. ' + ventasHoy.reduce((s, v) => s + v.total, 0).toFixed(2);
   document.getElementById('resumenGananciaHoy').textContent = 'L. ' + ventasHoy.reduce((s, v) => s + v.ganancia, 0).toFixed(2);
+  // "Hoy" solo tiene sentido viendo el mes actual
+  document.getElementById('tarjetasHoy').style.display = mesVentas === MES_ACTUAL() ? '' : 'none';
+  pintarSelectorMes('selectorMesVentas', mesVentas);
   actualizarResumenMes(ventas);
 
-  if (ventas.length === 0) {
-    contenedor.innerHTML = '<div class="vacio">Aún no hay ventas registradas.</div>';
+  const ventasDelMes = delMesElegido(ventas, mesVentas);
+  if (ventasDelMes.length === 0) {
+    contenedor.innerHTML = `<div class="vacio">No hay ventas en ${nombreDeMes(mesVentas)}.</div>`;
     return;
   }
 
-  contenedor.innerHTML = '<p class="ayuda-lista">Toca una venta para anularla.</p>' + ventas.map((v) => `
+  contenedor.innerHTML = '<p class="ayuda-lista">Toca una venta para anularla.</p>' + ventasDelMes.map((v) => `
     <div class="card${v.anulada ? ' venta-anulada' : ''}" data-id="${escaparHtml(v.id)}">
       <div class="info">
         <h3>${escaparHtml(v.nombreProducto)} &times;${Number(v.cantidad) || 0}${v.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}</h3>
@@ -744,9 +748,57 @@ async function refrescarVentas() {
 
 // ---------- Resumen del mes: vendido, ganancia y % de margen ----------
 // Margen = ganancia ÷ total vendido. Ej.: vendieron L.10,000 y ganaron L.2,000 → 20%.
-function inicioDeMes() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1);
+// ---------- Selector de mes (Ventas y Compras) ----------
+// Un mes se guarda como 'AAAA-MM'. Las ventas y compras no se mueven ni se
+// borran: quedan guardadas siempre y la pantalla solo filtra por el mes elegido.
+function claveMes(fecha) {
+  const d = new Date(fecha);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+const MES_ACTUAL = () => claveMes(new Date());
+function moverMes(clave, dir) {
+  const [a, m] = clave.split('-').map(Number);
+  return claveMes(new Date(a, m - 1 + dir, 1));
+}
+function nombreDeMes(clave) {
+  const [a, m] = clave.split('-').map(Number);
+  const t = new Date(a, m - 1, 1).toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function delMesElegido(lista, clave) {
+  return lista.filter((x) => claveMes(x.fecha) === clave);
+}
+// Primer y último día del mes, como 'AAAA-MM-DD' (para reportes y filtros)
+function limitesDeMes(clave) {
+  const [a, m] = clave.split('-').map(Number);
+  const ultimo = new Date(a, m, 0).getDate();
+  return { desde: `${clave}-01`, hasta: `${clave}-${String(ultimo).padStart(2, '0')}` };
+}
+
+let mesVentas = MES_ACTUAL();
+let mesCompras = MES_ACTUAL();
+
+// Pinta el selector y conecta flechas y lista de meses.
+function prepararSelectorMes(idSelector, obtenerMes, cambiarMes, listarMesesConDatos) {
+  const caja = document.getElementById(idSelector);
+  caja.querySelectorAll('.flecha-mes').forEach((b) => b.addEventListener('click', () => {
+    const nuevo = moverMes(obtenerMes(), Number(b.dataset.dir));
+    if (nuevo > MES_ACTUAL()) return;
+    cambiarMes(nuevo);
+  }));
+  caja.querySelector('.nombre-mes').addEventListener('click', async () => {
+    const meses = new Set(await listarMesesConDatos());
+    meses.add(MES_ACTUAL());
+    const opciones = [...meses].sort().reverse().map((k) => ({ id: k, texto: (k === obtenerMes() ? '✔ ' : '') + nombreDeMes(k), principal: k === obtenerMes() }));
+    const elegido = await elegirAccion('Elige el mes', opciones, '', 'Cerrar');
+    if (elegido) cambiarMes(elegido);
+  });
+}
+
+function pintarSelectorMes(idSelector, clave) {
+  const caja = document.getElementById(idSelector);
+  caja.querySelector('.nombre-mes').textContent = '📅 ' + nombreDeMes(clave) + ' ▾';
+  caja.querySelector('.flecha-mes[data-dir="1"]').disabled = clave >= MES_ACTUAL();
 }
 
 function formatoL(n) {
@@ -754,13 +806,10 @@ function formatoL(n) {
 }
 
 async function actualizarResumenMes(ventas) {
-  const desde = inicioDeMes();
-  const delMes = ventas.filter((v) => !v.anulada && new Date(v.fecha) >= desde);
+  const delMes = delMesElegido(ventas, mesVentas).filter((v) => !v.anulada);
   const vendido = delMes.reduce((s, v) => s + (Number(v.total) || 0), 0);
   const ganancia = delMes.reduce((s, v) => s + (Number(v.ganancia) || 0), 0);
   const margen = vendido > 0 ? (ganancia / vendido) * 100 : 0;
-  const nombreMes = desde.toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
-  document.getElementById('tituloMes').textContent = '📅 ' + nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
   document.getElementById('resumenVendidoMes').textContent = formatoL(vendido);
   document.getElementById('resumenGananciaMes').textContent = formatoL(ganancia);
   const elMargen = document.getElementById('resumenMargenMes');
@@ -770,10 +819,11 @@ async function actualizarResumenMes(ventas) {
   // Ventas de productos sin costo registrado: su ganancia sale "inflada"
   const sinCosto = delMes.filter((v) => !(Number(v.costoUnitario) > 0)).length;
   let nota = vendido > 0
-    ? `De cada L. 100 vendidos, les quedan L. ${margen.toFixed(0)} de ganancia (${delMes.length} venta${delMes.length === 1 ? '' : 's'} este mes).`
-    : 'Aún no hay ventas este mes.';
+    ? `De cada L. 100 vendidos, les quedan L. ${margen.toFixed(0)} de ganancia (${delMes.length} venta${delMes.length === 1 ? '' : 's'} en el mes).`
+    : 'No hay ventas en este mes.';
   try {
-    const { total } = await Compras.totalComprado({ desde: desde.toISOString().slice(0, 10) });
+    const { desde, hasta } = limitesDeMes(mesVentas);
+    const { total } = await Compras.totalComprado({ desde, hasta });
     if (total > 0) nota += ` Compras del mes: ${formatoL(total)}.`;
   } catch (e) { console.warn(e); }
   if (sinCosto) nota += ` ⚠️ ${sinCosto} venta${sinCosto === 1 ? '' : 's'} de productos sin costo registrado: el margen sale más alto de lo real.`;
@@ -881,14 +931,17 @@ document.getElementById('btnConfirmarCompra').addEventListener('click', async ()
 async function refrescarCompras() {
   const contenedor = document.getElementById('listaCompras');
   if (!contenedor) return;
-  const compras = await Compras.listarCompras({ incluirAnuladas: true });
-  const desde = inicioDeMes();
-  const delMes = compras.filter((c) => !c.anulada && new Date(c.fecha) >= desde);
+  const todas = await Compras.listarCompras({ incluirAnuladas: true });
+  pintarSelectorMes('selectorMesCompras', mesCompras);
+  const compras = delMesElegido(todas, mesCompras);
+  const delMes = compras.filter((c) => !c.anulada);
   document.getElementById('resumenComprasMes').textContent = formatoL(delMes.reduce((s, c) => s + (Number(c.total) || 0), 0));
   document.getElementById('resumenUnidadesMes').textContent = String(delMes.reduce((s, c) => s + (Number(c.cantidad) || 0), 0));
 
   if (compras.length === 0) {
-    contenedor.innerHTML = '<div class="vacio">Aún no hay compras. Toca "+" para registrar la primera.</div>';
+    contenedor.innerHTML = todas.length
+      ? `<div class="vacio">No hay compras en ${nombreDeMes(mesCompras)}.</div>`
+      : '<div class="vacio">Aún no hay compras. Toca "+" para registrar la primera.</div>';
     return;
   }
   contenedor.innerHTML = '<p class="ayuda-lista">Toca una compra para ver el detalle o anularla.</p>' + compras.map((c) => `
@@ -1123,6 +1176,45 @@ function manejarErrorCompartir(err) {
     alert('No se pudo compartir el reporte.');
   }
 }
+
+prepararSelectorMes('selectorMesVentas', () => mesVentas, (m) => { mesVentas = m; refrescarVentas(); },
+  async () => (await Ventas.listarVentas({ incluirAnuladas: true })).map((v) => claveMes(v.fecha)));
+prepararSelectorMes('selectorMesCompras', () => mesCompras, (m) => { mesCompras = m; refrescarCompras(); },
+  async () => (await Compras.listarCompras({ incluirAnuladas: true })).map((c) => claveMes(c.fecha)));
+
+// Reportes: al elegir un mes se llenan solas las fechas Desde y Hasta
+function conectarMesReporte(idMes, idDesde, idHasta) {
+  const mes = document.getElementById(idMes);
+  const aplicar = () => {
+    if (!/^\d{4}-\d{2}$/.test(mes.value)) return;
+    const { desde, hasta } = limitesDeMes(mes.value);
+    document.getElementById(idDesde).value = desde;
+    document.getElementById(idHasta).value = hasta;
+  };
+  mes.value = MES_ACTUAL();
+  aplicar();
+  mes.addEventListener('change', aplicar);
+  // Si cambian una fecha a mano, el mes deja de aplicar
+  [idDesde, idHasta].forEach((id) => document.getElementById(id).addEventListener('change', () => { mes.value = ''; }));
+}
+conectarMesReporte('reporteMes', 'reporteDesde', 'reporteHasta');
+conectarMesReporte('reporteComprasMes', 'reporteComprasDesde', 'reporteComprasHasta');
+
+document.getElementById('btnGenerarReporteCompras').addEventListener('click', async () => {
+  const desde = document.getElementById('reporteComprasDesde').value || null;
+  const hasta = document.getElementById('reporteComprasHasta').value || null;
+  try { await Reportes.generarReporteComprasPDF({ desde, hasta }); } catch (err) { alert(err.message || 'No se pudo crear el reporte.'); }
+});
+
+document.getElementById('btnCompartirReporteCompras').addEventListener('click', async () => {
+  const desde = document.getElementById('reporteComprasDesde').value || null;
+  const hasta = document.getElementById('reporteComprasHasta').value || null;
+  try {
+    await Reportes.compartirReporteComprasPDF({ desde, hasta });
+  } catch (err) {
+    manejarErrorCompartir(err);
+  }
+});
 
 document.getElementById('btnGenerarReporte').addEventListener('click', async () => {
   const desde = document.getElementById('reporteDesde').value || null;
