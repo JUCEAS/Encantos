@@ -103,6 +103,25 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
     y += 5;
   });
 
+  // Ventas anuladas del período, con su motivo (historial)
+  const anuladas = (await Ventas.listarVentas({ desde, hasta, incluirAnuladas: true })).filter((v) => v.anulada);
+  if (anuladas.length) {
+    y += 8;
+    if (y > 260) { doc.addPage(); y = 18; }
+    doc.setFontSize(12);
+    doc.text(`Ventas anuladas (${anuladas.length}) - no cuentan en los totales`, margenIzq, y);
+    y += 6;
+    doc.setFontSize(9);
+    anuladas.forEach((v) => {
+      if (y > 275) { doc.addPage(); y = 18; }
+      doc.text(`${new Date(v.fecha).toLocaleDateString()}  ${(v.nombreProducto || '').substring(0, 30)} x${v.cantidad}  ${formatoLempiras(v.total)}`, margenIzq, y);
+      y += 4;
+      const motivo = `Motivo: ${(v.motivoAnulacion || 'sin motivo registrado').replace(/[^\x20-\xFF]/g, '').trim()}${v.notaAnulacion ? ' - ' + v.notaAnulacion : ''}${v.regresoInventario === false ? ' (no regresó al inventario)' : ''}`;
+      doc.splitTextToSize(motivo, 175).forEach((linea) => { if (y > 280) { doc.addPage(); y = 18; } doc.text(linea, margenIzq + 4, y); y += 4; });
+      y += 2;
+    });
+  }
+
   const nombreArchivo = `encantos-ventas-${new Date().toISOString().slice(0, 10)}.pdf`;
   return { doc, nombreArchivo };
 }
@@ -139,9 +158,10 @@ async function construirPDFCompras({ desde = null, hasta = null } = {}) {
 
   if (compras.length === 0) {
     doc.text('No hay compras en este período.', margenIzq, y);
-    return { doc, nombreArchivo: `encantos-compras-${(desde || new Date().toISOString()).slice(0, 7)}.pdf` };
+    y += 6;
   }
 
+  if (compras.length) {
   // Por producto: cada línea de cada factura, con su parte del transporte
   const agrupar = (registros, clave, cantidad, valor) => {
     const g = {};
@@ -215,6 +235,28 @@ async function construirPDFCompras({ desde = null, hasta = null } = {}) {
       doc.line(38, y, 196, y); y += 4;
     }
   });
+
+  }
+
+  // Compras anuladas del período, con su motivo (historial)
+  const anuladas = (await Compras.listarCompras({ desde, hasta, incluirAnuladas: true })).filter((c) => c.anulada);
+  if (anuladas.length) {
+    y += 8;
+    nuevaPagina(260);
+    doc.setFontSize(12);
+    doc.text(`Compras anuladas (${anuladas.length}) - no cuentan en los totales`, margenIzq, y);
+    y += 6;
+    doc.setFontSize(9);
+    anuladas.forEach((c) => {
+      nuevaPagina(275);
+      const prods = Compras.lineasDe(c).map((l) => `${l.nombreProducto} x${l.cantidad}`).join(', ');
+      doc.text(`${new Date(c.fecha).toLocaleDateString()}  ${(c.nombreProveedor || '-').substring(0, 20)}  ${formatoLempiras(c.total)}  ${prods.substring(0, 60)}`, margenIzq, y);
+      y += 4;
+      const motivo = `Motivo: ${(c.motivoAnulacion || 'sin motivo registrado').replace(/[^\x20-\xFF]/g, '').trim()}${c.notaAnulacion ? ' - ' + c.notaAnulacion : ''}`;
+      doc.splitTextToSize(motivo, 175).forEach((linea) => { nuevaPagina(280); doc.text(linea, margenIzq + 4, y); y += 4; });
+      y += 2;
+    });
+  }
 
   const nombreArchivo = `encantos-compras-${(desde || new Date().toISOString()).slice(0, 7)}.pdf`;
   return { doc, nombreArchivo };
