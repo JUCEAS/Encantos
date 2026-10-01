@@ -1004,7 +1004,9 @@ function recalcularFactura() {
     let info = '';
     if (repetido) info = '⚠️ Este producto está repetido en la factura.';
     else if (c.cantidad > 0 && String(f.costo).trim() !== '') {
-      const finalTxt = transporte > 0 ? `Costo final c/u <b>${formatoL(c.costoFinalUnit)}</b> (con transporte)` : `Costo c/u ${formatoL(c.costoFinalUnit)}`;
+      const finalTxt = transporte > 0
+        ? `${formatoL(c.costoUnitario)} + <b>${formatoL(incrementoTransporte(c))}</b> de transporte = <b>${formatoL(c.costoFinalUnit)}</b> c/u`
+        : `Costo c/u ${formatoL(c.costoFinalUnit)}`;
       info = p ? `Stock ${Number(p.stock) || 0} → <b>${(Number(p.stock) || 0) + c.cantidad}</b> · ${finalTxt}` : finalTxt;
     }
     const caja = el.querySelector('.linea-info');
@@ -1125,19 +1127,29 @@ async function refrescarCompras() {
   });
 }
 
+// Lo que se le sumó a una planta por el transporte, por unidad
+function incrementoTransporte(l) {
+  return Math.max(0, Math.round(((Number(l.costoFinalUnit) || 0) - (Number(l.costoUnitario) || 0)) * 100) / 100);
+}
+
 function detalleCompraTexto(c) {
   const lineas = Compras.lineasDe(c);
   const filas = lineas.map((l) =>
     `• ${l.nombreProducto} ×${l.cantidad} a ${formatoL(l.costoUnitario)} = ${formatoL(l.subtotal)}` +
-    (Number(l.transporte) > 0 ? ` (costo final c/u ${formatoL(l.costoFinalUnit)})` : '') +
     (l.creadoEnFactura ? ' 🆕' : ''));
-  return [
+  const partes = [
     `${new Date(c.fecha).toLocaleDateString()}${c.nombreProveedor ? ' · ' + c.nombreProveedor : ''}${c.numeroFactura ? ' · Factura N.º ' + c.numeroFactura : ''}`,
     ...filas,
     Number(c.transporte) > 0 ? `Transporte: ${formatoL(c.transporte)}` : '',
     `Total: ${formatoL(c.total)} · ${Compras.unidadesDe(c)} unidades`,
-    c.registradaPor ? `Registró: ${c.registradaPor}` : '',
-  ].filter(Boolean).join('\n');
+  ].filter(Boolean);
+  // Al final: cuánto se le sumó a cada planta por el transporte (por unidad)
+  if (Number(c.transporte) > 0) {
+    partes.push('', '🚚 Transporte sumado a cada planta (por unidad):',
+      ...lineas.map((l) => `• ${l.nombreProducto}: ${formatoL(l.costoUnitario)} + ${formatoL(incrementoTransporte(l))} = ${formatoL(l.costoFinalUnit)}`));
+  }
+  if (c.registradaPor) partes.push('', `Registró: ${c.registradaPor}`);
+  return partes.join('\n');
 }
 
 async function mostrarOpcionesCompra(id) {
