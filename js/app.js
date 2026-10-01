@@ -863,6 +863,7 @@ async function mostrarOpcionesVenta(id) {
 
 let compraProductos = [];
 let filasFactura = [];
+let compraEnCorreccion = null; // compra que se está corrigiendo (o null si es una factura nueva)
 const CLAVE_BORRADOR = 'encantos-borrador-factura';
 
 function filaVacia() { return { nombre: '', cantidad: '', costo: '', categoria: '', precio: '' }; }
@@ -877,6 +878,7 @@ function leerBorrador() {
   try { return JSON.parse(localStorage.getItem(CLAVE_BORRADOR) || 'null'); } catch { return null; }
 }
 function guardarBorrador() {
+  if (compraEnCorreccion) return; // una corrección no pisa el borrador de una factura nueva
   try {
     localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
       proveedorId: document.getElementById('campoProveedorCompra').value,
@@ -892,13 +894,37 @@ function borrarBorrador() { try { localStorage.removeItem(CLAVE_BORRADOR); } cat
 
 function hoyLocal() { return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 
-async function abrirModalCompra(productoElegido = null) {
+async function abrirModalCompra(productoElegido = null, compraACorregir = null) {
   const [productos, proveedores] = await Promise.all([Inventario.listarProductos(), Proveedores.listarProveedores()]);
+  compraEnCorreccion = compraACorregir;
+  document.querySelector('#modalCompra h2').textContent = compraACorregir ? '✏️ Corregir compra' : '🧾 Registrar compra (factura)';
+  document.getElementById('btnConfirmarCompra').textContent = compraACorregir ? 'Guardar corrección' : 'Guardar factura';
+  document.getElementById('avisoCorreccion').hidden = !compraACorregir;
   compraProductos = productos;
   document.getElementById('listaProductosCompra').innerHTML = productos.map((p) =>
     `<option value="${escaparHtml(p.nombre)}">${escaparHtml(p.categoria)} · stock ${Number(p.stock) || 0}</option>`).join('');
   document.getElementById('campoProveedorCompra').innerHTML = '<option value="">— Sin proveedor —</option>' + proveedores.map((pr) =>
     `<option value="${escaparHtml(pr.id)}">${escaparHtml(pr.nombre)}${pr.empresa ? ' · ' + escaparHtml(pr.empresa) : ''}</option>`).join('');
+
+  if (compraACorregir) {
+    const c = compraACorregir;
+    const porId = new Map(productos.map((p) => [p.id, p]));
+    document.getElementById('campoProveedorCompra').value = c.proveedorId || '';
+    const f = new Date(c.fecha);
+    document.getElementById('campoFechaCompra').value = new Date(f.getTime() - f.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    document.getElementById('campoNumeroFactura').value = c.numeroFactura || '';
+    document.getElementById('campoTransporte').value = Number(c.transporte) > 0 ? String(c.transporte) : '';
+    document.getElementById('campoNotaCompra').value = c.nota || '';
+    filasFactura = Compras.lineasDe(c).map((l) => ({
+      ...filaVacia(),
+      nombre: (porId.get(l.productoId) || {}).nombre || l.nombreProducto,
+      cantidad: String(l.cantidad),
+      costo: String(l.costoUnitario),
+    }));
+    dibujarFilasFactura();
+    mostrarModal('modalCompra');
+    return;
+  }
 
   let borrador = leerBorrador();
   if (borrador && (borrador.filas || []).some(filaTieneDatos)) {
@@ -1043,7 +1069,7 @@ document.getElementById('btnAgregarLinea').addEventListener('click', () => {
 ['campoTransporte'].forEach((id) => document.getElementById(id).addEventListener('input', recalcularFactura));
 ['campoProveedorCompra', 'campoFechaCompra', 'campoNumeroFactura', 'campoNotaCompra'].forEach((id) =>
   document.getElementById(id).addEventListener('change', guardarBorrador));
-document.getElementById('btnCancelarCompra').addEventListener('click', () => ocultarModal('modalCompra'));
+document.getElementById('btnCancelarCompra').addEventListener('click', () => { compraEnCorreccion = null; ocultarModal('modalCompra'); });
 
 document.getElementById('btnConfirmarCompra').addEventListener('click', async () => {
   const boton = document.getElementById('btnConfirmarCompra');
@@ -1054,7 +1080,7 @@ document.getElementById('btnConfirmarCompra').addEventListener('click', async ()
   boton.disabled = true;
   boton.textContent = 'Guardando...';
   try {
-    const factura = await Compras.registrarFactura({
+    const datosFactura = {
       proveedorId: document.getElementById('campoProveedorCompra').value,
       fecha: document.getElementById('campoFechaCompra').value,
       numeroFactura: document.getElementById('campoNumeroFactura').value,
@@ -1070,19 +1096,24 @@ document.getElementById('btnConfirmarCompra').addEventListener('click', async ()
           nuevo: p ? null : { categoria: f.categoria, precio: f.precio },
         };
       }),
-    });
-    borrarBorrador();
+    };
+    const corrigiendo = compraEnCorreccion;
+    const factura = corrigiendo
+      ? await Compras.corregirFactura(corrigiendo.id, datosFactura)
+      : await Compras.registrarFactura(datosFactura);
+    if (!corrigiendo) borrarBorrador();
+    compraEnCorreccion = null;
     ocultarModal('modalCompra');
     refrescarCompras();
     refrescarInventario(document.getElementById('buscarTexto').value);
     const nuevos = factura.lineas.filter((l) => l.creadoEnFactura).length;
-    alert(`✅ Factura guardada: ${factura.lineas.length} producto${factura.lineas.length === 1 ? '' : 's'}, ${factura.unidades} unidades, total ${formatoL(factura.total)}.` +
+    alert(`${corrigiendo ? '✅ Corrección guardada. La compra anterior quedó como historial. Ahora' : '✅ Factura guardada:'} ${factura.lineas.length} producto${factura.lineas.length === 1 ? '' : 's'}, ${factura.unidades} unidades, total ${formatoL(factura.total)}.` +
       (nuevos ? `\n\n🆕 ${nuevos === 1 ? 'Se creó 1 producto nuevo' : `Se crearon ${nuevos} productos nuevos`} en Inventario (sin publicar en el catálogo). Agrégales foto y datos cuando puedas.` : ''));
   } catch (err) {
     alert(err.message || 'No se pudo guardar la factura.');
   } finally {
     boton.disabled = false;
-    boton.textContent = 'Guardar factura';
+    boton.textContent = compraEnCorreccion ? 'Guardar corrección' : 'Guardar factura';
   }
 });
 
@@ -1092,7 +1123,7 @@ async function refrescarCompras() {
   const todas = await Compras.listarCompras({ incluirAnuladas: true });
   pintarSelectorMes('selectorMesCompras', mesCompras);
   const compras = delMesElegido(todas, mesCompras);
-  const delMes = compras.filter((c) => !c.anulada);
+  const delMes = compras.filter((c) => !c.anulada && !c.corregida);
   document.getElementById('resumenComprasMes').textContent = formatoL(delMes.reduce((s, c) => s + (Number(c.total) || 0), 0));
   document.getElementById('resumenUnidadesMes').textContent = String(delMes.reduce((s, c) => s + Compras.unidadesDe(c), 0));
 
@@ -1102,7 +1133,7 @@ async function refrescarCompras() {
       : '<div class="vacio">Aún no hay compras. Toca "+" para registrar la primera.</div>';
     return;
   }
-  contenedor.innerHTML = '<p class="ayuda-lista">Toca una compra para ver el detalle o anularla.</p>' + compras.map((c) => {
+  contenedor.innerHTML = '<p class="ayuda-lista">Toca una compra para ver el detalle, corregirla o anularla.</p>' + compras.map((c) => {
     const lineas = Compras.lineasDe(c);
     const titulo = c.lineas
       ? `🧾 ${c.numeroFactura ? 'Factura N.º ' + escaparHtml(c.numeroFactura) : 'Factura'} · ${lineas.length} producto${lineas.length === 1 ? '' : 's'}`
@@ -1111,14 +1142,15 @@ async function refrescarCompras() {
       ? escaparHtml(lineas.slice(0, 3).map((l) => `${l.nombreProducto} ×${l.cantidad}`).join(', ') + (lineas.length > 3 ? `, y ${lineas.length - 3} más` : ''))
       : `${formatoL(c.costoUnitario)} c/u`;
     return `
-    <div class="card${c.anulada ? ' compra-anulada' : ''}" data-id="${escaparHtml(c.id)}">
+    <div class="card${c.anulada || c.corregida ? ' compra-anulada' : ''}" data-id="${escaparHtml(c.id)}">
       <div class="info">
-        <h3>${titulo}${c.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}</h3>
+        <h3>${titulo}${c.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}${c.corregida ? ' <span class="chip corregida">CORREGIDA</span>' : ''}${c.corrigeA ? ' <span class="chip">✏️ corrección</span>' : ''}</h3>
         <p>${new Date(c.fecha).toLocaleDateString()}${c.nombreProveedor ? ' · 🚚 ' + escaparHtml(c.nombreProveedor) : ''}</p>
         <p style="font-size:12px;color:#666;">${resumen}</p>
         <p class="precio">Total: ${formatoL(c.total)}${Number(c.transporte) > 0 ? ` &middot; incluye transporte ${formatoL(c.transporte)}` : ''}</p>
         ${c.nota ? `<p style="font-size:12px;color:#888;">📝 ${escaparHtml(c.nota)}</p>` : ''}
         ${c.anulada ? `<p class="nota-anulada">Anulada el ${new Date(c.anuladaEl).toLocaleString()}${c.anuladaPor ? ' por ' + escaparHtml(c.anuladaPor) : ''}</p>` : ''}
+        ${c.corregida ? `<p class="nota-anulada">Corregida el ${new Date(c.corregidaEl).toLocaleString()}${c.corregidaPor ? ' por ' + escaparHtml(c.corregidaPor) : ''}. No cuenta en los totales.</p>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1161,9 +1193,15 @@ async function mostrarOpcionesCompra(id) {
     await elegirAccion('Compra anulada', [], detalle + '\nYa no cuenta en los totales.', 'Cerrar');
     return;
   }
+  if (c.corregida) {
+    await elegirAccion('Compra corregida', [], detalle + `\n\nEsta es la versión anterior. Fue corregida el ${new Date(c.corregidaEl).toLocaleString()}${c.corregidaPor ? ' por ' + c.corregidaPor : ''} y ya no cuenta en los totales.`, 'Cerrar');
+    return;
+  }
   const accion = await elegirAccion(c.lineas ? 'Factura de compra' : 'Compra', [
+    { id: 'corregir', texto: '✏️ Corregir compra', principal: true },
     { id: 'anular', texto: c.lineas ? '↩️ Anular factura completa' : '↩️ Anular compra (quitar del stock)' },
   ], detalle, 'Cerrar');
+  if (accion === 'corregir') { abrirModalCompra(null, c); return; }
   if (accion !== 'anular') return;
   const unidades = Compras.unidadesDe(c);
   const seguro = await elegirAccion(c.lineas ? '¿Anular esta factura?' : '¿Anular esta compra?', [
