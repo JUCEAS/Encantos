@@ -50,6 +50,10 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
     const { compras, total } = await Compras.totalComprado({ desde, hasta });
     doc.text(`Compras de mercadería: ${formatoLempiras(total)} (${compras.length} compra${compras.length === 1 ? '' : 's'})`, margenIzq, y);
     y += 5;
+    // Caja: lo que entró por ventas menos lo que salió en compras. No es lo
+    // mismo que la ganancia: lo comprado puede no haberse vendido todavía.
+    doc.text(`Vendido - Compras (caja del período): ${formatoLempiras(totalVendido - total)}`, margenIzq, y);
+    y += 5;
   } catch (e) { console.warn('No se pudieron leer las compras', e); }
   y += 5;
 
@@ -100,6 +104,91 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
   });
 
   const nombreArchivo = `encantos-ventas-${new Date().toISOString().slice(0, 10)}.pdf`;
+  return { doc, nombreArchivo };
+}
+
+// ---------------------------------------------------------
+// Reporte de COMPRAS
+// ---------------------------------------------------------
+function textoPeriodo(desde, hasta, todo) {
+  return desde || hasta
+    ? `Periodo: ${desde ? new Date(desde + 'T00:00:00').toLocaleDateString() : '...'} a ${hasta ? new Date(hasta + 'T00:00:00').toLocaleDateString() : 'hoy'}`
+    : todo;
+}
+
+async function construirPDFCompras({ desde = null, hasta = null } = {}) {
+  const doc = nuevoDocPDF('Reporte de Compras');
+  const margenIzq = 14;
+  let y = 32;
+  const { compras, total } = await Compras.totalComprado({ desde, hasta });
+  const nuevaPagina = (limite) => { if (y > limite) { doc.addPage(); y = 18; } };
+
+  doc.setFontSize(10);
+  doc.text(textoPeriodo(desde, hasta, 'Periodo: todas las compras registradas'), margenIzq, y);
+  y += 10;
+  doc.setFontSize(12);
+  doc.text('Resumen', margenIzq, y);
+  y += 6;
+  doc.setFontSize(10);
+  const unidades = compras.reduce((s, c) => s + (Number(c.cantidad) || 0), 0);
+  doc.text(`Total comprado: ${formatoLempiras(total)}`, margenIzq, y); y += 5;
+  doc.text(`Número de compras: ${compras.length}`, margenIzq, y); y += 5;
+  doc.text(`Unidades compradas: ${unidades}`, margenIzq, y); y += 10;
+
+  if (compras.length === 0) {
+    doc.text('No hay compras en este período.', margenIzq, y);
+    return { doc, nombreArchivo: `encantos-compras-${(desde || new Date().toISOString()).slice(0, 7)}.pdf` };
+  }
+
+  const agrupar = (clave) => {
+    const g = {};
+    compras.forEach((c) => {
+      const k = clave(c) || 'Sin proveedor';
+      if (!g[k]) g[k] = { cantidad: 0, total: 0 };
+      g[k].cantidad += Number(c.cantidad) || 0;
+      g[k].total += Number(c.total) || 0;
+    });
+    return Object.entries(g).map(([nombre, d]) => ({ nombre, ...d })).sort((a, b) => b.total - a.total);
+  };
+
+  const tabla = (titulo, filas, encabezado) => {
+    nuevaPagina(255);
+    doc.setFontSize(12);
+    doc.text(titulo, margenIzq, y); y += 6;
+    doc.setFontSize(9);
+    doc.text(encabezado, margenIzq, y); doc.text('Cant.', 130, y); doc.text('Total', 160, y);
+    y += 4; doc.line(margenIzq, y, 196, y); y += 4;
+    filas.forEach((f) => {
+      nuevaPagina(280);
+      doc.text(String(f.nombre).substring(0, 55), margenIzq, y);
+      doc.text(String(f.cantidad), 130, y);
+      doc.text(formatoLempiras(f.total), 160, y);
+      y += 5;
+    });
+    y += 8;
+  };
+  tabla('Por producto', agrupar((c) => c.nombreProducto), 'Producto');
+  tabla('Por proveedor', agrupar((c) => c.nombreProveedor), 'Proveedor');
+
+  nuevaPagina(255);
+  doc.setFontSize(12);
+  doc.text('Detalle de compras', margenIzq, y); y += 6;
+  doc.setFontSize(9);
+  doc.text('Fecha', margenIzq, y); doc.text('Producto', 38, y); doc.text('Proveedor', 95, y);
+  doc.text('Cant.', 140, y); doc.text('C/u', 155, y); doc.text('Total', 177, y);
+  y += 4; doc.line(margenIzq, y, 196, y); y += 4;
+  compras.slice().reverse().forEach((c) => {
+    nuevaPagina(280);
+    doc.text(new Date(c.fecha).toLocaleDateString(), margenIzq, y);
+    doc.text((c.nombreProducto || '').substring(0, 28), 38, y);
+    doc.text((c.nombreProveedor || '-').substring(0, 22), 95, y);
+    doc.text(String(c.cantidad), 140, y);
+    doc.text((Number(c.costoUnitario) || 0).toFixed(2), 155, y);
+    doc.text((Number(c.total) || 0).toFixed(2), 177, y);
+    y += 5;
+  });
+
+  const nombreArchivo = `encantos-compras-${(desde || new Date().toISOString()).slice(0, 7)}.pdf`;
   return { doc, nombreArchivo };
 }
 
@@ -299,6 +388,9 @@ async function compartirPDF(constructor, opciones = {}) {
 async function generarReporteVentasPDF(opciones) { return descargarPDF(construirPDFVentas, opciones); }
 async function compartirReporteVentasPDF(opciones) { return compartirPDF(construirPDFVentas, opciones); }
 
+async function generarReporteComprasPDF(opciones) { return descargarPDF(construirPDFCompras, opciones); }
+async function compartirReporteComprasPDF(opciones) { return compartirPDF(construirPDFCompras, opciones); }
+
 async function generarReporteClientesPDF() { return descargarPDF(construirPDFClientes); }
 async function compartirReporteClientesPDF() { return compartirPDF(construirPDFClientes); }
 
@@ -311,6 +403,8 @@ async function compartirReporteProveedoresPDF() { return compartirPDF(construirP
 window.Reportes = {
   generarReporteVentasPDF,
   compartirReporteVentasPDF,
+  generarReporteComprasPDF,
+  compartirReporteComprasPDF,
   generarReporteClientesPDF,
   compartirReporteClientesPDF,
   generarReporteInventarioPDF,
