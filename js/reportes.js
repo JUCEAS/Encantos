@@ -130,8 +130,10 @@ async function construirPDFCompras({ desde = null, hasta = null } = {}) {
   doc.text('Resumen', margenIzq, y);
   y += 6;
   doc.setFontSize(10);
-  const unidades = compras.reduce((s, c) => s + (Number(c.cantidad) || 0), 0);
+  const unidades = compras.reduce((s, c) => s + Compras.unidadesDe(c), 0);
+  const transporte = compras.reduce((s, c) => s + (Number(c.transporte) || 0), 0);
   doc.text(`Total comprado: ${formatoLempiras(total)}`, margenIzq, y); y += 5;
+  if (transporte > 0) { doc.text(`  de eso, transporte: ${formatoLempiras(transporte)} (ya incluido en el costo de las plantas)`, margenIzq, y); y += 5; }
   doc.text(`Número de compras: ${compras.length}`, margenIzq, y); y += 5;
   doc.text(`Unidades compradas: ${unidades}`, margenIzq, y); y += 10;
 
@@ -140,16 +142,18 @@ async function construirPDFCompras({ desde = null, hasta = null } = {}) {
     return { doc, nombreArchivo: `encantos-compras-${(desde || new Date().toISOString()).slice(0, 7)}.pdf` };
   }
 
-  const agrupar = (clave) => {
+  // Por producto: cada línea de cada factura, con su parte del transporte
+  const agrupar = (registros, clave, cantidad, valor) => {
     const g = {};
-    compras.forEach((c) => {
-      const k = clave(c) || 'Sin proveedor';
+    registros.forEach((r) => {
+      const k = clave(r) || 'Sin proveedor';
       if (!g[k]) g[k] = { cantidad: 0, total: 0 };
-      g[k].cantidad += Number(c.cantidad) || 0;
-      g[k].total += Number(c.total) || 0;
+      g[k].cantidad += cantidad(r);
+      g[k].total += valor(r);
     });
     return Object.entries(g).map(([nombre, d]) => ({ nombre, ...d })).sort((a, b) => b.total - a.total);
   };
+  const todasLasLineas = compras.flatMap((c) => Compras.lineasDe(c));
 
   const tabla = (titulo, filas, encabezado) => {
     nuevaPagina(255);
@@ -167,8 +171,9 @@ async function construirPDFCompras({ desde = null, hasta = null } = {}) {
     });
     y += 8;
   };
-  tabla('Por producto', agrupar((c) => c.nombreProducto), 'Producto');
-  tabla('Por proveedor', agrupar((c) => c.nombreProveedor), 'Proveedor');
+  tabla('Por producto (costo con transporte)', agrupar(todasLasLineas, (l) => l.nombreProducto, (l) => Number(l.cantidad) || 0,
+    (l) => (Number(l.subtotal) || 0) + (Number(l.transporte) || 0)), 'Producto');
+  tabla('Por proveedor', agrupar(compras, (c) => c.nombreProveedor, (c) => Compras.unidadesDe(c), (c) => Number(c.total) || 0), 'Proveedor');
 
   nuevaPagina(255);
   doc.setFontSize(12);
@@ -178,14 +183,28 @@ async function construirPDFCompras({ desde = null, hasta = null } = {}) {
   doc.text('Cant.', 140, y); doc.text('C/u', 155, y); doc.text('Total', 177, y);
   y += 4; doc.line(margenIzq, y, 196, y); y += 4;
   compras.slice().reverse().forEach((c) => {
-    nuevaPagina(280);
-    doc.text(new Date(c.fecha).toLocaleDateString(), margenIzq, y);
-    doc.text((c.nombreProducto || '').substring(0, 28), 38, y);
-    doc.text((c.nombreProveedor || '-').substring(0, 22), 95, y);
-    doc.text(String(c.cantidad), 140, y);
-    doc.text((Number(c.costoUnitario) || 0).toFixed(2), 155, y);
-    doc.text((Number(c.total) || 0).toFixed(2), 177, y);
-    y += 5;
+    const lineas = Compras.lineasDe(c);
+    lineas.forEach((l, i) => {
+      nuevaPagina(280);
+      if (i === 0) {
+        doc.text(new Date(c.fecha).toLocaleDateString(), margenIzq, y);
+        doc.text(((c.nombreProveedor || '-') + (c.numeroFactura ? ' #' + c.numeroFactura : '')).substring(0, 24), 95, y);
+      }
+      doc.text((l.nombreProducto || '').substring(0, 28), 38, y);
+      doc.text(String(l.cantidad), 140, y);
+      doc.text((Number(l.costoUnitario) || 0).toFixed(2), 155, y);
+      doc.text((Number(l.subtotal) || 0).toFixed(2), 177, y);
+      y += 5;
+    });
+    if (Number(c.transporte) > 0) {
+      nuevaPagina(280);
+      doc.text('Transporte', 38, y); doc.text((Number(c.transporte) || 0).toFixed(2), 177, y); y += 5;
+    }
+    if (c.lineas) {
+      nuevaPagina(280);
+      doc.text('Total factura', 38, y); doc.text((Number(c.total) || 0).toFixed(2), 177, y); y += 3;
+      doc.line(38, y, 196, y); y += 4;
+    }
   });
 
   const nombreArchivo = `encantos-compras-${(desde || new Date().toISOString()).slice(0, 7)}.pdf`;
