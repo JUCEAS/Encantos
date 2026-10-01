@@ -44,7 +44,7 @@
 
   <!-- ================= VENTAS ================= -->
   <section id="vista-ventas" class="vista">
-    <div class="resumen-grid">
+    <div class="resumen-grid" id="tarjetasHoy">
       <div class="card">
         <div>
           <div class="valor" id="resumenTotalHoy">L. 0</div>
@@ -59,7 +59,11 @@
       </div>
     </div>
     <div class="resumen-mes">
-      <div class="titulo-mes" id="tituloMes">Este mes</div>
+      <div class="selector-mes" id="selectorMesVentas">
+        <button type="button" class="flecha-mes" data-dir="-1" aria-label="Mes anterior">◀</button>
+        <button type="button" class="nombre-mes" id="tituloMes">Este mes</button>
+        <button type="button" class="flecha-mes" data-dir="1" aria-label="Mes siguiente">▶</button>
+      </div>
       <div class="resumen-grid tres">
         <div class="card"><div><div class="valor" id="resumenVendidoMes">L. 0</div><div class="etiqueta">Vendido</div></div></div>
         <div class="card"><div><div class="valor" id="resumenGananciaMes">L. 0</div><div class="etiqueta">Ganancia</div></div></div>
@@ -72,9 +76,14 @@
 
   <!-- ================= COMPRAS ================= -->
   <section id="vista-compras" class="vista">
+    <div class="selector-mes" id="selectorMesCompras">
+      <button type="button" class="flecha-mes" data-dir="-1" aria-label="Mes anterior">◀</button>
+      <button type="button" class="nombre-mes" id="tituloMesCompras">Este mes</button>
+      <button type="button" class="flecha-mes" data-dir="1" aria-label="Mes siguiente">▶</button>
+    </div>
     <div class="resumen-grid">
-      <div class="card"><div><div class="valor" id="resumenComprasMes">L. 0</div><div class="etiqueta">Comprado este mes</div></div></div>
-      <div class="card"><div><div class="valor" id="resumenUnidadesMes">0</div><div class="etiqueta">Unidades este mes</div></div></div>
+      <div class="card"><div><div class="valor" id="resumenComprasMes">L. 0</div><div class="etiqueta">Comprado en el mes</div></div></div>
+      <div class="card"><div><div class="valor" id="resumenUnidadesMes">0</div><div class="etiqueta">Unidades en el mes</div></div></div>
     </div>
     <div id="listaCompras"><div class="cargando">Cargando compras...</div></div>
   </section>
@@ -99,6 +108,8 @@
   <section id="vista-reportes" class="vista">
     <div class="card" style="flex-direction:column;">
       <h3 style="margin-top:0;">Reporte de ventas</h3>
+      <label>Mes</label>
+      <input type="month" id="reporteMes">
       <label>Desde</label>
       <input type="date" id="reporteDesde">
       <label>Hasta</label>
@@ -108,6 +119,22 @@
       </div>
       <div class="fila-botones">
         <button class="btn secundario" id="btnCompartirReporte">📤 Compartir por WhatsApp</button>
+      </div>
+    </div>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Reporte de compras</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">Lo que compraron en el período: por producto, por proveedor y el detalle de cada compra.</p>
+      <label>Mes</label>
+      <input type="month" id="reporteComprasMes">
+      <label>Desde</label>
+      <input type="date" id="reporteComprasDesde">
+      <label>Hasta</label>
+      <input type="date" id="reporteComprasHasta">
+      <div class="fila-botones">
+        <button class="btn" id="btnGenerarReporteCompras">📄 Descargar PDF</button>
+      </div>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnCompartirReporteCompras">📤 Compartir por WhatsApp</button>
       </div>
     </div>
     <div class="card" style="flex-direction:column;">
