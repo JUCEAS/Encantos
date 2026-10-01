@@ -265,6 +265,79 @@ async function guardarFacturaCompra(factura, calcularCosto, enLinea) {
   });
 }
 
+// Corrige una factura: deshace la original (stock y costo) y aplica la nueva,
+// todo en una sola operación. La original queda marcada como "corregida".
+// normalizar(compra) devuelve las líneas de cualquier compra (vieja o factura).
+async function corregirFacturaCompra(idOriginal, factura, fn, enLinea) {
+  const { costoPromedio, costoSinCompra, normalizar, datosCorreccion } = fn;
+  const refOriginal = coleccion(STORES.compras).doc(idOriginal);
+  const refNueva = coleccion(STORES.compras).doc();
+  const refsNuevas = factura.lineas.map((l) => (l.productoId ? coleccion(STORES.productos).doc(l.productoId) : coleccion(STORES.productos).doc()));
+  return ejecutarOperacion(enLinea, async (leer, escribir) => {
+    // 1) Lecturas
+    const snapO = await leer(refOriginal);
+    if (!snapO.exists) throw errorCon('no-existe');
+    const original = snapO.data();
+    if (original.anulada) throw errorCon('ya-anulada');
+    if (original.corregida) throw errorCon('ya-corregida');
+    const viejas = normalizar(original);
+    const ids = [...new Set([...viejas.map((l) => l.productoId), ...factura.lineas.filter((l) => l.productoId).map((l) => l.productoId)].filter(Boolean))];
+    const snaps = await Promise.all(ids.map((id) => leer(coleccion(STORES.productos).doc(id))));
+    const estado = new Map();
+    snaps.forEach((s, i) => { if (s && s.exists) estado.set(ids[i], { ...s.data(), stock: Number(s.data().stock) || 0, costo: Number(s.data().costo) || 0 }); });
+
+    // 2) Deshacer la factura original
+    viejas.forEach((l) => {
+      const p = estado.get(l.productoId);
+      if (!p) return;
+      const cant = Number(l.cantidad) || 0;
+      const stockAntes = p.stock;
+      p.stock = stockAntes - cant;
+      const base = l.creadoEnFactura ? l.costoFinalUnit : l.costoAnterior;
+      p.costo = p.stock === Number(l.stockAnterior) && !l.creadoEnFactura
+        ? Number(l.costoAnterior) || 0
+        : costoSinCompra(stockAntes, p.costo, cant, Number(l.costoFinalUnit) || 0, Number(base) || 0);
+      p.tocado = true;
+    });
+
+    // 3) Aplicar la factura corregida
+    const lineas = factura.lineas.map((l, i) => {
+      const { nuevoProducto, ...linea } = l;
+      if (nuevoProducto) {
+        escribir.set(refsNuevas[i], { ...nuevoProducto, stock: l.cantidad, costo: l.costoFinalUnit });
+        return { ...linea, productoId: refsNuevas[i].id, creadoEnFactura: true, stockAnterior: 0, costoAnterior: 0, costoNuevo: l.costoFinalUnit };
+      }
+      const p = estado.get(l.productoId);
+      if (!p) throw errorCon('no-existe', { nombre: l.nombreProducto });
+      const stockAnterior = p.stock;
+      const costoAnterior = p.costo;
+      const costoNuevo = costoPromedio(stockAnterior, costoAnterior, l.cantidad, l.costoFinalUnit);
+      p.stock = stockAnterior + l.cantidad;
+      p.costo = costoNuevo;
+      p.tocado = true;
+      if (factura.proveedorId && !p.proveedorId) { p.proveedorId = factura.proveedorId; p.origen = 'Compra a proveedor'; p.cambioProveedor = true; }
+      return { ...linea, productoId: l.productoId, stockAnterior, costoAnterior, costoNuevo };
+    });
+
+    // 4) Ningún producto puede quedar con stock negativo
+    const negativos = [];
+    estado.forEach((p) => { if (p.tocado && p.stock < 0) negativos.push(`${p.nombre} (quedaría en ${p.stock})`); });
+    if (negativos.length) throw errorCon('stock-insuficiente', { detalle: negativos });
+
+    // 5) Escrituras
+    estado.forEach((p, id) => {
+      if (!p.tocado) return;
+      const cambios = { stock: p.stock, costo: p.costo };
+      if (p.cambioProveedor) { cambios.proveedorId = p.proveedorId; cambios.origen = p.origen; }
+      escribir.update(coleccion(STORES.productos).doc(id), cambios);
+    });
+    const registro = { ...factura, lineas, corrigeA: idOriginal };
+    escribir.set(refNueva, registro);
+    escribir.update(refOriginal, { corregida: true, reemplazadaPor: refNueva.id, ...datosCorreccion });
+    return { id: refNueva.id, ...registro, productosAfectados: [...estado.keys()].filter((id) => estado.get(id).tocado) };
+  });
+}
+
 // Anula una factura completa: quita las unidades de cada producto y saca la
 // factura del costo promedio. Si ya se vendieron unidades, no se permite.
 async function anularFacturaCompra(compraId, datosAnulacion, calcularCosto, enLinea) {
@@ -430,6 +503,7 @@ window.DB = {
   anularCompraEnTransaccion,
   guardarFacturaCompra,
   anularFacturaCompra,
+  corregirFacturaCompra,
   esErrorDeConexion,
   mensajeDeError,
   eliminar,
