@@ -199,6 +199,15 @@ async function construirPDFCompras({ desde = null, hasta = null } = {}) {
     if (Number(c.transporte) > 0) {
       nuevaPagina(280);
       doc.text('Transporte', 38, y); doc.text((Number(c.transporte) || 0).toFixed(2), 177, y); y += 5;
+      // Cuánto se le sumó a cada planta por el transporte (por unidad)
+      nuevaPagina(280);
+      doc.text('Transporte sumado a cada planta (por unidad):', 38, y); y += 5;
+      lineas.forEach((l) => {
+        nuevaPagina(280);
+        const inc = Math.max(0, (Number(l.costoFinalUnit) || 0) - (Number(l.costoUnitario) || 0));
+        doc.text(`${(l.nombreProducto || '').substring(0, 30)}: ${(Number(l.costoUnitario) || 0).toFixed(2)} + ${inc.toFixed(2)} = ${(Number(l.costoFinalUnit) || 0).toFixed(2)}`, 42, y);
+        y += 5;
+      });
     }
     if (c.lineas) {
       nuevaPagina(280);
