@@ -274,7 +274,7 @@ textarea { resize: vertical; min-height: 60px; }
 /* ---------- Menú de acciones ---------- */
 .menu-acciones .modal { display: flex; flex-direction: column; gap: 10px; }
 .menu-acciones .modal h2 { margin: 0 0 4px; }
-.menu-acciones .mensaje-accion { margin: 0 0 4px; font-size: 14px; color: var(--rojo); line-height: 1.4; }
+.menu-acciones .mensaje-accion { margin: 0 0 4px; font-size: 14px; color: #444; line-height: 1.4; }
 .btn.btn-cancelar { background: transparent; color: #666; border: 1px solid var(--borde); }
 
 /* ---------- Pestaña de agotados ---------- */
@@ -317,7 +317,29 @@ nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .valor.margen-bajo { color: var(--rojo) !important; }
 
 /* ---------- Compras ---------- */
-.vista-previa-compra { background: #eef5ec; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; margin: 10px 0; }
-.vista-previa-compra:empty { display: none; }
 .card.compra-anulada { opacity: 0.6; }
 .card.compra-anulada h3, .card.compra-anulada .precio { text-decoration: line-through; }
+
+/* ---------- Factura de compra ---------- */
+.fila-dos { display: flex; gap: 8px; }
+.fila-dos label { flex: 1; display: flex; flex-direction: column; }
+.linea-factura { border: 1px solid var(--borde); border-radius: 12px; padding: 8px 10px; margin: 8px 0; background: #fafaf7; }
+.linea-factura.es-nuevo { border-color: #c9a24a; background: #fffaf0; }
+.linea-cab { display: flex; align-items: center; gap: 6px; }
+.linea-cab .num { min-width: 24px; height: 24px; border-radius: 12px; background: var(--verde); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.linea-cab input { flex: 1; margin: 0; }
+.linea-cab .l-quitar { border: none; background: none; color: #999; font-size: 16px; padding: 6px; cursor: pointer; }
+.linea-nums { display: flex; gap: 6px; align-items: flex-end; margin-top: 6px; }
+.linea-nums label { flex: 1; font-size: 11px; color: #666; display: flex; flex-direction: column; margin: 0; }
+.linea-nums input, .linea-nums select { margin: 2px 0 0; padding: 8px; }
+.linea-nums .l-sub { flex: 1; font-size: 11px; color: #666; display: flex; flex-direction: column; padding-bottom: 8px; }
+.linea-nums .l-sub b { font-size: 14px; color: #333; }
+.aviso-nuevo { font-size: 12px; color: #8a6d1f; margin-top: 6px; font-weight: 600; }
+.linea-info { font-size: 12px; color: #4b6b46; margin-top: 4px; }
+.linea-info:empty { display: none; }
+.linea-info.alerta { color: var(--rojo); font-weight: 600; }
+.resumen-factura { background: #eef5ec; border-radius: 12px; padding: 10px 12px; margin-top: 12px; font-size: 14px; }
+.resumen-factura div { display: flex; justify-content: space-between; padding: 2px 0; }
+.resumen-factura .total { border-top: 1px solid #c9dcc4; margin-top: 4px; padding-top: 6px; font-size: 16px; color: var(--verde); }
+.resumen-factura .unidades { font-size: 12px; color: #666; justify-content: flex-end; }
+.menu-acciones .mensaje-accion { white-space: pre-line; }
