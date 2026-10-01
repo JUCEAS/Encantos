@@ -69,6 +69,57 @@ function elegirAccion(titulo, opciones, mensaje = '', textoCancelar = 'Cancelar'
   });
 }
 
+// Ventana para anular: motivo (obligatorio), nota y, en ventas, si la planta
+// regresa al inventario. Devuelve { motivo, nota, regresaInventario } o null.
+function pedirMotivo({ titulo, mensaje = '', motivos, conRegreso = false, textoBoton = 'Anular' }) {
+  return new Promise((resolve) => {
+    const velo = document.createElement('div');
+    velo.className = 'modal-overlay activo menu-acciones';
+    velo.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h2>${escaparHtml(titulo)}</h2>
+        ${mensaje ? `<p class="mensaje-accion">${escaparHtml(mensaje)}</p>` : ''}
+        <label>¿Por qué se anula?</label>
+        <select class="m-motivo"><option value="">— Elige el motivo —</option>${motivos.map((m) => `<option value="${escaparHtml(m.id)}">${escaparHtml(m.texto)}</option>`).join('')}</select>
+        <label>Nota (opcional)</label>
+        <textarea class="m-nota" rows="2" maxlength="300" placeholder="Ej.: no le gustó el color y la cambió por una Monstera"></textarea>
+        ${conRegreso ? '<label class="m-regreso"><input type="checkbox" class="m-check" checked> La planta regresa al inventario (se suma al stock)</label>' : ''}
+        <p class="m-error"></p>
+        <button class="btn peligro" data-accion="ok">${escaparHtml(textoBoton)}</button>
+        <button class="btn btn-cancelar" data-accion="">Cancelar</button>
+      </div>`;
+    const sel = velo.querySelector('.m-motivo');
+    const nota = velo.querySelector('.m-nota');
+    const check = velo.querySelector('.m-check');
+    const error = velo.querySelector('.m-error');
+    sel.addEventListener('change', () => {
+      const m = motivos.find((x) => x.id === sel.value);
+      if (check && m && typeof m.regresa === 'boolean') check.checked = m.regresa;
+      nota.placeholder = sel.value === 'otro' ? 'Escribe el motivo (obligatorio)' : 'Ej.: detalles de lo que pasó';
+      error.textContent = '';
+    });
+    const cerrar = (valor) => { velo.remove(); resolve(valor); };
+    velo.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-accion]');
+      if (!b) { if (e.target === velo) cerrar(null); return; }
+      if (b.dataset.accion !== 'ok') { cerrar(null); return; }
+      if (!sel.value) { error.textContent = 'Elige el motivo.'; return; }
+      if (sel.value === 'otro' && !nota.value.trim()) { error.textContent = 'Escribe en la nota cuál fue el motivo.'; return; }
+      cerrar({ motivo: sel.value, nota: nota.value.trim(), regresaInventario: check ? check.checked : true });
+    });
+    document.body.appendChild(velo);
+  });
+}
+
+// Texto del historial de una anulación (motivo, nota, si regresó al inventario)
+function textoAnulacion(x, conRegreso = false) {
+  let t = `Anulada el ${new Date(x.anuladaEl).toLocaleString()}${x.anuladaPor ? ' por ' + x.anuladaPor : ''}`;
+  if (x.motivoAnulacion) t += `. Motivo: ${x.motivoAnulacion}`;
+  if (x.notaAnulacion) t += ` — "${x.notaAnulacion}"`;
+  if (conRegreso && x.regresoInventario === false) t += '. La planta NO regresó al inventario';
+  return t + '.';
+}
+
 function mostrarModal(id) { document.getElementById(id).classList.add('activo'); }
 function ocultarModal(id) { document.getElementById(id).classList.remove('activo'); }
 
@@ -661,11 +712,39 @@ document.getElementById('inputGaleriaBusqueda').addEventListener('change', manej
 // VENTAS
 // =========================================================
 
+// ---------- Corregir una venta (cantidad, precio, cliente) ----------
+let ventaEnCorreccion = null;
+
+async function abrirCorreccionVenta(venta) {
+  const producto = venta.productoId ? await DB.obtener(DB.STORES.productos, venta.productoId) : null;
+  ventaEnCorreccion = venta;
+  const disponible = (producto ? Number(producto.stock) || 0 : 0) + (Number(venta.cantidad) || 0);
+  // Para la ganancia se usa el costo que tenía la planta el día de la venta
+  ventaProductoActual = { id: venta.productoId, nombre: venta.nombreProducto, costo: Number(venta.costoUnitario) || 0, stock: disponible };
+  document.querySelector('#modalVenta h2').textContent = '✏️ Corregir venta';
+  document.getElementById('btnConfirmarVenta').textContent = 'Guardar corrección';
+  document.getElementById('ventaProductoNombre').textContent =
+    `${venta.nombreProducto} · vendida el ${new Date(venta.fecha).toLocaleDateString()}` + (producto ? ` (puedes subir hasta ${disponible})` : '');
+  const cant = document.getElementById('campoCantidadVenta');
+  cant.value = venta.cantidad; cant.min = 1; cant.step = 1; cant.max = producto ? disponible : venta.cantidad;
+  document.getElementById('campoPrecioVenta').value = (Number(venta.precioUnitario) || 0).toFixed(2);
+  const clientes = await Clientes.listarClientes();
+  const select = document.getElementById('campoClienteVenta');
+  select.innerHTML = '<option value="">Cliente general</option>' +
+    clientes.map((c) => `<option value="${escaparHtml(c.id)}">${escaparHtml(c.nombre)}</option>`).join('');
+  select.value = venta.clienteId || '';
+  actualizarGananciaEstimada();
+  mostrarModal('modalVenta');
+}
+
 async function abrirModalVenta(producto) {
   if ((Number(producto.stock) || 0) <= 0) {
     alert(`⛔ No se puede vender "${producto.nombre}": no hay existencias (stock 0).`);
     return;
   }
+  ventaEnCorreccion = null;
+  document.querySelector('#modalVenta h2').textContent = 'Registrar venta';
+  document.getElementById('btnConfirmarVenta').textContent = 'Confirmar venta';
   ventaProductoActual = producto;
   document.getElementById('ventaProductoNombre').textContent = `${producto.nombre} (stock: ${producto.stock})`;
   document.getElementById('campoCantidadVenta').value = 1;
@@ -693,9 +772,31 @@ function actualizarGananciaEstimada() {
 
 document.getElementById('campoCantidadVenta').addEventListener('input', actualizarGananciaEstimada);
 document.getElementById('campoPrecioVenta').addEventListener('input', actualizarGananciaEstimada);
-document.getElementById('btnCancelarVenta').addEventListener('click', () => ocultarModal('modalVenta'));
+document.getElementById('btnCancelarVenta').addEventListener('click', () => { ventaEnCorreccion = null; ocultarModal('modalVenta'); });
 
 document.getElementById('btnConfirmarVenta').addEventListener('click', async () => {
+  if (ventaEnCorreccion) {
+    const boton = document.getElementById('btnConfirmarVenta');
+    if (boton.disabled) return;
+    boton.disabled = true;
+    try {
+      const v = await Ventas.corregirVenta(ventaEnCorreccion.id, {
+        clienteId: document.getElementById('campoClienteVenta').value || null,
+        cantidad: document.getElementById('campoCantidadVenta').value,
+        precioVenta: document.getElementById('campoPrecioVenta').value,
+      });
+      ventaEnCorreccion = null;
+      ocultarModal('modalVenta');
+      refrescarInventario(document.getElementById('buscarTexto').value);
+      refrescarVentas();
+      alert(`✅ Venta corregida: ${v.nombreProducto} ×${v.cantidad}, total ${formatoL(v.total)}. La versión anterior quedó como historial.`);
+    } catch (err) {
+      alert(err.message || 'No se pudo corregir la venta.');
+    } finally {
+      boton.disabled = false;
+    }
+    return;
+  }
   try {
     await Ventas.registrarVenta({
       productoId: ventaProductoActual.id,
@@ -716,7 +817,7 @@ async function refrescarVentas() {
   const ventas = await Ventas.listarVentas({ incluirAnuladas: true });
 
   const hoy = new Date().toDateString();
-  const ventasHoy = ventas.filter((v) => !v.anulada && new Date(v.fecha).toDateString() === hoy);
+  const ventasHoy = ventas.filter((v) => !v.anulada && !v.corregida && new Date(v.fecha).toDateString() === hoy);
   document.getElementById('resumenTotalHoy').textContent = 'L. ' + ventasHoy.reduce((s, v) => s + v.total, 0).toFixed(2);
   document.getElementById('resumenGananciaHoy').textContent = 'L. ' + ventasHoy.reduce((s, v) => s + v.ganancia, 0).toFixed(2);
   // "Hoy" solo tiene sentido viendo el mes actual
@@ -730,13 +831,14 @@ async function refrescarVentas() {
     return;
   }
 
-  contenedor.innerHTML = '<p class="ayuda-lista">Toca una venta para anularla.</p>' + ventasDelMes.map((v) => `
-    <div class="card${v.anulada ? ' venta-anulada' : ''}" data-id="${escaparHtml(v.id)}">
+  contenedor.innerHTML = '<p class="ayuda-lista">Toca una venta para corregirla o anularla.</p>' + ventasDelMes.map((v) => `
+    <div class="card${v.anulada || v.corregida ? ' venta-anulada' : ''}" data-id="${escaparHtml(v.id)}">
       <div class="info">
-        <h3>${escaparHtml(v.nombreProducto)} &times;${Number(v.cantidad) || 0}${v.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}</h3>
+        <h3>${escaparHtml(v.nombreProducto)} &times;${Number(v.cantidad) || 0}${v.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}${v.corregida ? ' <span class="chip corregida">CORREGIDA</span>' : ''}${v.corrigeA ? ' <span class="chip">✏️ corrección</span>' : ''}</h3>
         <p>${new Date(v.fecha).toLocaleString()}</p>
         <p class="precio">Total: L. ${(Number(v.total) || 0).toFixed(2)} &middot; Ganancia: L. ${(Number(v.ganancia) || 0).toFixed(2)}</p>
-        ${v.anulada ? `<p class="nota-anulada">Anulada el ${new Date(v.anuladaEl).toLocaleString()}${v.anuladaPor ? ' por ' + escaparHtml(v.anuladaPor) : ''}</p>` : ''}
+        ${v.anulada ? `<p class="nota-anulada">${escaparHtml(textoAnulacion(v, true))}</p>` : ''}
+        ${v.corregida ? `<p class="nota-anulada">Corregida el ${new Date(v.corregidaEl).toLocaleString()}${v.corregidaPor ? ' por ' + escaparHtml(v.corregidaPor) : ''}. No cuenta en los totales.</p>` : ''}
       </div>
     </div>
   `).join('');
@@ -806,7 +908,7 @@ function formatoL(n) {
 }
 
 async function actualizarResumenMes(ventas) {
-  const delMes = delMesElegido(ventas, mesVentas).filter((v) => !v.anulada);
+  const delMes = delMesElegido(ventas, mesVentas).filter((v) => !v.anulada && !v.corregida);
   const vendido = delMes.reduce((s, v) => s + (Number(v.total) || 0), 0);
   const ganancia = delMes.reduce((s, v) => s + (Number(v.ganancia) || 0), 0);
   const margen = vendido > 0 ? (ganancia / vendido) * 100 : 0;
@@ -834,20 +936,40 @@ async function mostrarOpcionesVenta(id) {
   const ventas = await Ventas.listarVentas({ incluirAnuladas: true });
   const venta = ventas.find((v) => v.id === id);
   if (!venta) return;
-  const detalle = `${venta.nombreProducto} ×${venta.cantidad} · Total L. ${(Number(venta.total) || 0).toFixed(2)} · ${new Date(venta.fecha).toLocaleString()}`;
+  const cliente = venta.clienteId ? (await Clientes.listarClientes()).find((c) => c.id === venta.clienteId) : null;
+  const detalle = `${venta.nombreProducto} ×${venta.cantidad} a ${formatoL(venta.precioUnitario)} · Total ${formatoL(venta.total)}\n` +
+    `${new Date(venta.fecha).toLocaleString()}${cliente ? ' · Cliente: ' + cliente.nombre : ''}`;
   if (venta.anulada) {
-    await elegirAccion('Venta anulada', [], detalle + ' · Ya no cuenta en los totales ni en los reportes.', 'Cerrar');
+    await elegirAccion('Venta anulada', [], detalle + '\n\n' + textoAnulacion(venta, true) + '\nYa no cuenta en los totales ni en los reportes.', 'Cerrar');
     return;
   }
-  const accion = await elegirAccion('¿Anular esta venta?', [
-    { id: 'anular', texto: '↩️ Sí, anular y devolver al inventario', principal: true },
-  ], detalle);
+  if (venta.corregida) {
+    await elegirAccion('Venta corregida', [], detalle + `\n\nEsta es la versión anterior. Fue corregida el ${new Date(venta.corregidaEl).toLocaleString()}${venta.corregidaPor ? ' por ' + venta.corregidaPor : ''} y ya no cuenta en los totales.`, 'Cerrar');
+    return;
+  }
+  const accion = await elegirAccion('Venta', [
+    { id: 'corregir', texto: '✏️ Corregir venta (cantidad, precio o cliente)', principal: true },
+    { id: 'anular', texto: '↩️ Anular venta (devolución, cambio, etc.)' },
+  ], detalle, 'Cerrar');
+  if (accion === 'corregir') { abrirCorreccionVenta(venta); return; }
   if (accion !== 'anular') return;
+  const r = await pedirMotivo({
+    titulo: '¿Anular esta venta?',
+    mensaje: detalle,
+    motivos: Ventas.MOTIVOS_ANULAR,
+    conRegreso: true,
+    textoBoton: 'Anular venta',
+  });
+  if (!r) return;
   try {
-    const r = await Ventas.anularVenta(id);
+    const res = await Ventas.anularVenta(id, r);
     refrescarVentas();
     refrescarInventario(document.getElementById('buscarTexto').value);
-    if (!r.productoExiste) alert('Venta anulada. El producto ya no existe en el inventario, así que no se devolvió stock.');
+    let aviso = res.regresoInventario
+      ? (res.productoExiste ? `✅ Venta anulada. Se devolvieron ${venta.cantidad} al inventario.` : '✅ Venta anulada. El producto ya no existe en el inventario, así que no se devolvió stock.')
+      : '✅ Venta anulada. La planta no regresó al inventario.';
+    if (r.motivo === 'cambio') aviso += '\n\n🔁 Ahora registra la venta de la planta nueva desde Inventario.';
+    alert(aviso);
   } catch (err) {
     alert(err.message || 'No se pudo anular la venta. Revisa tu conexión e intenta de nuevo.');
   }
@@ -1149,7 +1271,7 @@ async function refrescarCompras() {
         <p style="font-size:12px;color:#666;">${resumen}</p>
         <p class="precio">Total: ${formatoL(c.total)}${Number(c.transporte) > 0 ? ` &middot; incluye transporte ${formatoL(c.transporte)}` : ''}</p>
         ${c.nota ? `<p style="font-size:12px;color:#888;">📝 ${escaparHtml(c.nota)}</p>` : ''}
-        ${c.anulada ? `<p class="nota-anulada">Anulada el ${new Date(c.anuladaEl).toLocaleString()}${c.anuladaPor ? ' por ' + escaparHtml(c.anuladaPor) : ''}</p>` : ''}
+        ${c.anulada ? `<p class="nota-anulada">${escaparHtml(textoAnulacion(c))}</p>` : ''}
         ${c.corregida ? `<p class="nota-anulada">Corregida el ${new Date(c.corregidaEl).toLocaleString()}${c.corregidaPor ? ' por ' + escaparHtml(c.corregidaPor) : ''}. No cuenta en los totales.</p>` : ''}
       </div>
     </div>`;
@@ -1190,7 +1312,7 @@ async function mostrarOpcionesCompra(id) {
   if (!c) return;
   const detalle = detalleCompraTexto(c);
   if (c.anulada) {
-    await elegirAccion('Compra anulada', [], detalle + '\nYa no cuenta en los totales.', 'Cerrar');
+    await elegirAccion('Compra anulada', [], detalle + '\n\n' + textoAnulacion(c) + '\nYa no cuenta en los totales.', 'Cerrar');
     return;
   }
   if (c.corregida) {
@@ -1204,13 +1326,16 @@ async function mostrarOpcionesCompra(id) {
   if (accion === 'corregir') { abrirModalCompra(null, c); return; }
   if (accion !== 'anular') return;
   const unidades = Compras.unidadesDe(c);
-  const seguro = await elegirAccion(c.lineas ? '¿Anular esta factura?' : '¿Anular esta compra?', [
-    { id: 'si', texto: 'Sí, anular', principal: true },
-  ], `Se quitarán ${unidades} unidades del inventario y se recalcularán los costos.`);
-  if (seguro !== 'si') return;
+  const motivo = await pedirMotivo({
+    titulo: c.lineas ? '¿Anular esta factura?' : '¿Anular esta compra?',
+    mensaje: `Se quitarán ${unidades} unidades del inventario y se recalcularán los costos.`,
+    motivos: Compras.MOTIVOS_ANULAR_COMPRA,
+    textoBoton: 'Anular compra',
+  });
+  if (!motivo) return;
   try {
-    if (c.lineas) await Compras.anularFactura(id);
-    else await Compras.anularCompra(id);
+    if (c.lineas) await Compras.anularFactura(id, motivo);
+    else await Compras.anularCompra(id, motivo);
     refrescarCompras();
     refrescarInventario(document.getElementById('buscarTexto').value);
   } catch (err) {
