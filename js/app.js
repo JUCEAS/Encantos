@@ -857,74 +857,230 @@ async function mostrarOpcionesVenta(id) {
 // COMPRAS
 // =========================================================
 
+// ---------- Factura de compra: varios productos + transporte ----------
+// Cada fila es un producto de la factura. Si el nombre no existe en el
+// inventario, la fila se marca como "producto nuevo" y se crea al guardar.
+
 let compraProductos = [];
+let filasFactura = [];
+const CLAVE_BORRADOR = 'encantos-borrador-factura';
+
+function filaVacia() { return { nombre: '', cantidad: '', costo: '', categoria: '', precio: '' }; }
+function filaTieneDatos(f) { return !!(String(f.nombre).trim() || String(f.cantidad).trim() || String(f.costo).trim()); }
+function normalizarNombre(t) { return String(t || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+function productoPorNombre(nombre) {
+  const n = normalizarNombre(nombre);
+  return n ? compraProductos.find((p) => normalizarNombre(p.nombre) === n) || null : null;
+}
+
+function leerBorrador() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_BORRADOR) || 'null'); } catch { return null; }
+}
+function guardarBorrador() {
+  try {
+    localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
+      proveedorId: document.getElementById('campoProveedorCompra').value,
+      fecha: document.getElementById('campoFechaCompra').value,
+      numero: document.getElementById('campoNumeroFactura').value,
+      transporte: document.getElementById('campoTransporte').value,
+      nota: document.getElementById('campoNotaCompra').value,
+      filas: filasFactura,
+    }));
+  } catch (e) { /* sin espacio o bloqueado: se ignora */ }
+}
+function borrarBorrador() { try { localStorage.removeItem(CLAVE_BORRADOR); } catch (e) { /* nada */ } }
+
+function hoyLocal() { return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 
 async function abrirModalCompra(productoElegido = null) {
   const [productos, proveedores] = await Promise.all([Inventario.listarProductos(), Proveedores.listarProveedores()]);
-  compraProductos = productos.slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-  const selProd = document.getElementById('campoProductoCompra');
-  selProd.innerHTML = '<option value="">— Elige el producto —</option>' + compraProductos.map((p) =>
-    `<option value="${escaparHtml(p.id)}">${escaparHtml(p.nombre)} (stock: ${Number(p.stock) || 0})</option>`).join('');
-  const selProv = document.getElementById('campoProveedorCompra');
-  selProv.innerHTML = '<option value="">— Sin proveedor —</option>' + proveedores.map((pr) =>
+  compraProductos = productos;
+  document.getElementById('listaProductosCompra').innerHTML = productos.map((p) =>
+    `<option value="${escaparHtml(p.nombre)}">${escaparHtml(p.categoria)} · stock ${Number(p.stock) || 0}</option>`).join('');
+  document.getElementById('campoProveedorCompra').innerHTML = '<option value="">— Sin proveedor —</option>' + proveedores.map((pr) =>
     `<option value="${escaparHtml(pr.id)}">${escaparHtml(pr.nombre)}${pr.empresa ? ' · ' + escaparHtml(pr.empresa) : ''}</option>`).join('');
-  selProd.value = productoElegido ? productoElegido.id : '';
-  document.getElementById('campoCantidadCompra').value = 1;
-  document.getElementById('campoFechaCompra').value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  document.getElementById('campoNotaCompra').value = '';
-  alCambiarProductoCompra();
+
+  let borrador = leerBorrador();
+  if (borrador && (borrador.filas || []).some(filaTieneDatos)) {
+    const n = borrador.filas.filter(filaTieneDatos).length;
+    const r = await elegirAccion('Tienes una factura sin terminar', [
+      { id: 'seguir', texto: `📝 Continuar (${n} producto${n === 1 ? '' : 's'})`, principal: true },
+      { id: 'nueva', texto: '🗑️ Empezar una nueva (borrar la anterior)' },
+    ], '', 'Cancelar');
+    if (!r) return;
+    if (r === 'nueva') { borrarBorrador(); borrador = null; }
+  } else {
+    borrador = null;
+  }
+
+  if (borrador) {
+    document.getElementById('campoProveedorCompra').value = borrador.proveedorId || '';
+    document.getElementById('campoFechaCompra').value = borrador.fecha || hoyLocal();
+    document.getElementById('campoNumeroFactura').value = borrador.numero || '';
+    document.getElementById('campoTransporte').value = borrador.transporte || '';
+    document.getElementById('campoNotaCompra').value = borrador.nota || '';
+    filasFactura = borrador.filas.map((f) => ({ ...filaVacia(), ...f }));
+  } else {
+    document.getElementById('campoProveedorCompra').value = productoElegido && productoElegido.proveedorId ? productoElegido.proveedorId : '';
+    document.getElementById('campoFechaCompra').value = hoyLocal();
+    document.getElementById('campoNumeroFactura').value = '';
+    document.getElementById('campoTransporte').value = '';
+    document.getElementById('campoNotaCompra').value = '';
+    filasFactura = [filaVacia()];
+  }
+  if (productoElegido && !filasFactura.some((f) => productoPorNombre(f.nombre)?.id === productoElegido.id)) {
+    const vacia = filasFactura.findIndex((f) => !filaTieneDatos(f));
+    const fila = { ...filaVacia(), nombre: productoElegido.nombre };
+    if (vacia >= 0) filasFactura[vacia] = fila; else filasFactura.push(fila);
+  }
+  dibujarFilasFactura();
   mostrarModal('modalCompra');
 }
 
-function alCambiarProductoCompra() {
-  const p = compraProductos.find((x) => x.id === document.getElementById('campoProductoCompra').value);
-  document.getElementById('campoCostoCompra').value = p && Number(p.costo) > 0 ? Number(p.costo).toFixed(2) : '';
-  if (p && p.proveedorId) document.getElementById('campoProveedorCompra').value = p.proveedorId;
-  actualizarPreviaCompra();
+function dibujarFilasFactura() {
+  const cont = document.getElementById('lineasFactura');
+  const categorias = Inventario.CATEGORIAS_INFO.map((c) => `<option value="${escaparHtml(c.nombre)}">${c.emoji} ${escaparHtml(c.nombre)}</option>`).join('');
+  cont.innerHTML = filasFactura.map((f, i) => `
+    <div class="linea-factura" data-i="${i}">
+      <div class="linea-cab">
+        <span class="num">${i + 1}</span>
+        <input class="l-nombre" list="listaProductosCompra" placeholder="Planta o producto" value="${escaparHtml(f.nombre)}" autocomplete="off">
+        <button type="button" class="l-quitar" aria-label="Quitar fila">✖</button>
+      </div>
+      <div class="linea-nuevo" hidden>
+        <div class="aviso-nuevo">🆕 Producto nuevo: se creará en Inventario</div>
+        <div class="linea-nums">
+          <label>Categoría<select class="l-categoria"><option value="">— Elige —</option>${categorias}</select></label>
+          <label>Precio de venta<input class="l-precio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="L." value="${escaparHtml(f.precio)}"></label>
+        </div>
+      </div>
+      <div class="linea-nums">
+        <label>Cantidad<input class="l-cant" type="number" min="1" step="1" inputmode="numeric" value="${escaparHtml(f.cantidad)}"></label>
+        <label>Costo c/u (L.)<input class="l-costo" type="number" min="0" step="0.01" inputmode="decimal" value="${escaparHtml(f.costo)}"></label>
+        <div class="l-sub"><span>Subtotal</span><b>L. 0.00</b></div>
+      </div>
+      <div class="linea-info"></div>
+    </div>`).join('');
+  cont.querySelectorAll('.linea-factura').forEach((el) => {
+    const i = Number(el.dataset.i);
+    el.querySelector('.l-categoria').value = filasFactura[i].categoria || '';
+    const enlazar = (sel, campo) => el.querySelector(sel).addEventListener('input', (e) => { filasFactura[i][campo] = e.target.value; recalcularFactura(); });
+    enlazar('.l-nombre', 'nombre'); enlazar('.l-cant', 'cantidad'); enlazar('.l-costo', 'costo'); enlazar('.l-precio', 'precio');
+    el.querySelector('.l-categoria').addEventListener('change', (e) => { filasFactura[i].categoria = e.target.value; recalcularFactura(); });
+    el.querySelector('.l-quitar').addEventListener('click', () => {
+      filasFactura.splice(i, 1);
+      if (!filasFactura.length) filasFactura.push(filaVacia());
+      dibujarFilasFactura();
+    });
+  });
+  document.getElementById('campoNumLineas').value = filasFactura.length;
+  recalcularFactura();
 }
 
-function actualizarPreviaCompra() {
-  const caja = document.getElementById('previaCompra');
-  const p = compraProductos.find((x) => x.id === document.getElementById('campoProductoCompra').value);
-  const cantidad = parseInt(document.getElementById('campoCantidadCompra').value, 10) || 0;
-  const costo = parseFloat(document.getElementById('campoCostoCompra').value);
-  if (!p || cantidad < 1 || !(costo >= 0)) { caja.innerHTML = ''; return; }
-  const stock = Number(p.stock) || 0;
-  const nuevoCosto = Compras.costoPromedio(stock, p.costo, cantidad, costo);
-  const precio = Number(p.precio) || 0;
-  const margen = precio > 0 ? ((precio - nuevoCosto) / precio) * 100 : null;
-  caja.innerHTML = `
-    Total de la compra: <b>${formatoL(cantidad * costo)}</b><br>
-    Stock: ${stock} → <b>${stock + cantidad}</b><br>
-    Costo por unidad: ${formatoL(p.costo)} → <b>${formatoL(nuevoCosto)}</b> (promedio)<br>
-    ${margen !== null ? `Vendiendo a ${formatoL(precio)}, ganarían <b>${margen.toFixed(0)}%</b> por unidad.` : 'Este producto no tiene precio de venta.'}`;
+// Recalcula subtotales, transporte, costo final y total sin redibujar las filas
+// (así no se pierde lo que se está escribiendo).
+function recalcularFactura() {
+  const transporte = Math.max(0, parseFloat(document.getElementById('campoTransporte').value) || 0);
+  const base = filasFactura.map((f) => ({
+    cantidad: Math.max(0, parseInt(f.cantidad, 10) || 0),
+    costoUnitario: Math.max(0, parseFloat(f.costo) || 0),
+  }));
+  const calculadas = Compras.repartirTransporte(base, transporte);
+  const conteo = {};
+  filasFactura.forEach((f) => { const k = normalizarNombre(f.nombre); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+  let nuevos = 0;
+  document.querySelectorAll('#lineasFactura .linea-factura').forEach((el) => {
+    const i = Number(el.dataset.i);
+    const f = filasFactura[i];
+    const c = calculadas[i];
+    const p = productoPorNombre(f.nombre);
+    const esNuevo = !p && !!String(f.nombre).trim();
+    if (esNuevo) nuevos++;
+    el.querySelector('.linea-nuevo').hidden = !esNuevo;
+    el.classList.toggle('es-nuevo', esNuevo);
+    el.querySelector('.l-costo').placeholder = p && Number(p.costo) > 0 ? 'Antes ' + Number(p.costo).toFixed(2) : '0.00';
+    el.querySelector('.l-sub b').textContent = formatoL(c.subtotal);
+    const repetido = conteo[normalizarNombre(f.nombre)] > 1;
+    let info = '';
+    if (repetido) info = '⚠️ Este producto está repetido en la factura.';
+    else if (c.cantidad > 0 && String(f.costo).trim() !== '') {
+      const finalTxt = transporte > 0 ? `Costo final c/u <b>${formatoL(c.costoFinalUnit)}</b> (con transporte)` : `Costo c/u ${formatoL(c.costoFinalUnit)}`;
+      info = p ? `Stock ${Number(p.stock) || 0} → <b>${(Number(p.stock) || 0) + c.cantidad}</b> · ${finalTxt}` : finalTxt;
+    }
+    const caja = el.querySelector('.linea-info');
+    caja.innerHTML = info;
+    caja.classList.toggle('alerta', repetido);
+  });
+  const totalProductos = calculadas.reduce((s, c) => s + c.subtotal, 0);
+  const unidades = calculadas.reduce((s, c) => s + c.cantidad, 0);
+  const conDatos = filasFactura.filter(filaTieneDatos).length;
+  document.getElementById('resumenFactura').innerHTML = `
+    <div><span>Productos (${conDatos}${nuevos ? `, ${nuevos} nuevo${nuevos === 1 ? '' : 's'}` : ''})</span><b>${formatoL(totalProductos)}</b></div>
+    <div><span>Transporte</span><b>${formatoL(transporte)}</b></div>
+    <div class="total"><span>Total de la factura</span><b>${formatoL(totalProductos + transporte)}</b></div>
+    <div class="unidades">${unidades} unidad${unidades === 1 ? '' : 'es'} en total</div>`;
+  guardarBorrador();
 }
 
-document.getElementById('campoProductoCompra').addEventListener('change', alCambiarProductoCompra);
-['campoCantidadCompra', 'campoCostoCompra'].forEach((id) => document.getElementById(id).addEventListener('input', actualizarPreviaCompra));
+// "¿Cuántos productos trae la factura?": agrega filas vacías o quita las vacías del final
+document.getElementById('campoNumLineas').addEventListener('change', (e) => {
+  let n = parseInt(e.target.value, 10) || 1;
+  n = Math.min(Math.max(n, 1), Compras.MAX_LINEAS || 200);
+  if (n === filasFactura.length) { e.target.value = n; return; } // nada que cambiar: no redibujar
+  while (filasFactura.length < n) filasFactura.push(filaVacia());
+  while (filasFactura.length > n && !filaTieneDatos(filasFactura[filasFactura.length - 1])) filasFactura.pop();
+  if (filasFactura.length > n) alert('Algunas filas ya tienen datos. Quítalas con la ✖ si no van en la factura.');
+  dibujarFilasFactura();
+});
+document.getElementById('btnAgregarLinea').addEventListener('click', () => {
+  filasFactura.push(filaVacia());
+  dibujarFilasFactura();
+  const filas = document.querySelectorAll('#lineasFactura .l-nombre');
+  filas[filas.length - 1].focus();
+});
+['campoTransporte'].forEach((id) => document.getElementById(id).addEventListener('input', recalcularFactura));
+['campoProveedorCompra', 'campoFechaCompra', 'campoNumeroFactura', 'campoNotaCompra'].forEach((id) =>
+  document.getElementById(id).addEventListener('change', guardarBorrador));
 document.getElementById('btnCancelarCompra').addEventListener('click', () => ocultarModal('modalCompra'));
 
 document.getElementById('btnConfirmarCompra').addEventListener('click', async () => {
   const boton = document.getElementById('btnConfirmarCompra');
   if (boton.disabled) return;
+  // Se ignoran las filas totalmente vacías (por ejemplo, si pusieron 10 y llenaron 9)
+  const filas = filasFactura.filter(filaTieneDatos);
+  if (!filas.length) { alert('Agrega al menos un producto a la factura.'); return; }
   boton.disabled = true;
+  boton.textContent = 'Guardando...';
   try {
-    const compra = await Compras.registrarCompra({
-      productoId: document.getElementById('campoProductoCompra').value,
+    const factura = await Compras.registrarFactura({
       proveedorId: document.getElementById('campoProveedorCompra').value,
-      cantidad: document.getElementById('campoCantidadCompra').value,
-      costoUnitario: document.getElementById('campoCostoCompra').value,
       fecha: document.getElementById('campoFechaCompra').value,
+      numeroFactura: document.getElementById('campoNumeroFactura').value,
       nota: document.getElementById('campoNotaCompra').value,
+      transporte: document.getElementById('campoTransporte').value,
+      lineas: filas.map((f) => {
+        const p = productoPorNombre(f.nombre);
+        return {
+          productoId: p ? p.id : null,
+          nombre: f.nombre,
+          cantidad: f.cantidad,
+          costoUnitario: f.costo,
+          nuevo: p ? null : { categoria: f.categoria, precio: f.precio },
+        };
+      }),
     });
+    borrarBorrador();
     ocultarModal('modalCompra');
     refrescarCompras();
     refrescarInventario(document.getElementById('buscarTexto').value);
-    alert(`✅ Compra guardada: ${compra.nombreProducto} +${compra.cantidad}.`);
+    const nuevos = factura.lineas.filter((l) => l.creadoEnFactura).length;
+    alert(`✅ Factura guardada: ${factura.lineas.length} producto${factura.lineas.length === 1 ? '' : 's'}, ${factura.unidades} unidades, total ${formatoL(factura.total)}.` +
+      (nuevos ? `\n\n🆕 ${nuevos === 1 ? 'Se creó 1 producto nuevo' : `Se crearon ${nuevos} productos nuevos`} en Inventario (sin publicar en el catálogo). Agrégales foto y datos cuando puedas.` : ''));
   } catch (err) {
-    alert(err.message || 'No se pudo guardar la compra.');
+    alert(err.message || 'No se pudo guardar la factura.');
   } finally {
     boton.disabled = false;
+    boton.textContent = 'Guardar factura';
   }
 });
 
@@ -936,7 +1092,7 @@ async function refrescarCompras() {
   const compras = delMesElegido(todas, mesCompras);
   const delMes = compras.filter((c) => !c.anulada);
   document.getElementById('resumenComprasMes').textContent = formatoL(delMes.reduce((s, c) => s + (Number(c.total) || 0), 0));
-  document.getElementById('resumenUnidadesMes').textContent = String(delMes.reduce((s, c) => s + (Number(c.cantidad) || 0), 0));
+  document.getElementById('resumenUnidadesMes').textContent = String(delMes.reduce((s, c) => s + Compras.unidadesDe(c), 0));
 
   if (compras.length === 0) {
     contenedor.innerHTML = todas.length
@@ -944,41 +1100,67 @@ async function refrescarCompras() {
       : '<div class="vacio">Aún no hay compras. Toca "+" para registrar la primera.</div>';
     return;
   }
-  contenedor.innerHTML = '<p class="ayuda-lista">Toca una compra para ver el detalle o anularla.</p>' + compras.map((c) => `
+  contenedor.innerHTML = '<p class="ayuda-lista">Toca una compra para ver el detalle o anularla.</p>' + compras.map((c) => {
+    const lineas = Compras.lineasDe(c);
+    const titulo = c.lineas
+      ? `🧾 ${c.numeroFactura ? 'Factura N.º ' + escaparHtml(c.numeroFactura) : 'Factura'} · ${lineas.length} producto${lineas.length === 1 ? '' : 's'}`
+      : `${escaparHtml(c.nombreProducto)} +${Number(c.cantidad) || 0}`;
+    const resumen = c.lineas
+      ? escaparHtml(lineas.slice(0, 3).map((l) => `${l.nombreProducto} ×${l.cantidad}`).join(', ') + (lineas.length > 3 ? `, y ${lineas.length - 3} más` : ''))
+      : `${formatoL(c.costoUnitario)} c/u`;
+    return `
     <div class="card${c.anulada ? ' compra-anulada' : ''}" data-id="${escaparHtml(c.id)}">
       <div class="info">
-        <h3>${escaparHtml(c.nombreProducto)} +${Number(c.cantidad) || 0}${c.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}</h3>
+        <h3>${titulo}${c.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}</h3>
         <p>${new Date(c.fecha).toLocaleDateString()}${c.nombreProveedor ? ' · 🚚 ' + escaparHtml(c.nombreProveedor) : ''}</p>
-        <p class="precio">Total: ${formatoL(c.total)} &middot; ${formatoL(c.costoUnitario)} c/u</p>
+        <p style="font-size:12px;color:#666;">${resumen}</p>
+        <p class="precio">Total: ${formatoL(c.total)}${Number(c.transporte) > 0 ? ` &middot; incluye transporte ${formatoL(c.transporte)}` : ''}</p>
         ${c.nota ? `<p style="font-size:12px;color:#888;">📝 ${escaparHtml(c.nota)}</p>` : ''}
         ${c.anulada ? `<p class="nota-anulada">Anulada el ${new Date(c.anuladaEl).toLocaleString()}${c.anuladaPor ? ' por ' + escaparHtml(c.anuladaPor) : ''}</p>` : ''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   contenedor.querySelectorAll('.card[data-id]').forEach((card) => {
     card.addEventListener('click', () => mostrarOpcionesCompra(card.dataset.id));
   });
+}
+
+function detalleCompraTexto(c) {
+  const lineas = Compras.lineasDe(c);
+  const filas = lineas.map((l) =>
+    `• ${l.nombreProducto} ×${l.cantidad} a ${formatoL(l.costoUnitario)} = ${formatoL(l.subtotal)}` +
+    (Number(l.transporte) > 0 ? ` (costo final c/u ${formatoL(l.costoFinalUnit)})` : '') +
+    (l.creadoEnFactura ? ' 🆕' : ''));
+  return [
+    `${new Date(c.fecha).toLocaleDateString()}${c.nombreProveedor ? ' · ' + c.nombreProveedor : ''}${c.numeroFactura ? ' · Factura N.º ' + c.numeroFactura : ''}`,
+    ...filas,
+    Number(c.transporte) > 0 ? `Transporte: ${formatoL(c.transporte)}` : '',
+    `Total: ${formatoL(c.total)} · ${Compras.unidadesDe(c)} unidades`,
+    c.registradaPor ? `Registró: ${c.registradaPor}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 async function mostrarOpcionesCompra(id) {
   const compras = await Compras.listarCompras({ incluirAnuladas: true });
   const c = compras.find((x) => x.id === id);
   if (!c) return;
-  const detalle = `${c.nombreProducto} +${c.cantidad} · ${formatoL(c.costoUnitario)} c/u · Total ${formatoL(c.total)} · ${new Date(c.fecha).toLocaleDateString()}` +
-    (c.registradaPor ? ` · Registró: ${c.registradaPor}` : '');
+  const detalle = detalleCompraTexto(c);
   if (c.anulada) {
-    await elegirAccion('Compra anulada', [], detalle + ' · Ya no cuenta en los totales.', 'Cerrar');
+    await elegirAccion('Compra anulada', [], detalle + '\nYa no cuenta en los totales.', 'Cerrar');
     return;
   }
-  const accion = await elegirAccion('Compra', [
-    { id: 'anular', texto: '↩️ Anular compra (quitar del stock)' },
+  const accion = await elegirAccion(c.lineas ? 'Factura de compra' : 'Compra', [
+    { id: 'anular', texto: c.lineas ? '↩️ Anular factura completa' : '↩️ Anular compra (quitar del stock)' },
   ], detalle, 'Cerrar');
   if (accion !== 'anular') return;
-  const seguro = await elegirAccion('¿Anular esta compra?', [
+  const unidades = Compras.unidadesDe(c);
+  const seguro = await elegirAccion(c.lineas ? '¿Anular esta factura?' : '¿Anular esta compra?', [
     { id: 'si', texto: 'Sí, anular', principal: true },
-  ], `Se quitarán ${c.cantidad} unidades de "${c.nombreProducto}" y se recalculará el costo.`);
+  ], `Se quitarán ${unidades} unidades del inventario y se recalcularán los costos.`);
   if (seguro !== 'si') return;
   try {
-    await Compras.anularCompra(id);
+    if (c.lineas) await Compras.anularFactura(id);
+    else await Compras.anularCompra(id);
     refrescarCompras();
     refrescarInventario(document.getElementById('buscarTexto').value);
   } catch (err) {
