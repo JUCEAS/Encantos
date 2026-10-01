@@ -50,6 +50,7 @@ async function registrarVenta(datos) {
           : `Otra persona acaba de vender "${producto.nombre}". Ahora solo quedan ${err.stock}.`);
       }
       if (err.code === 'no-existe') throw new Error('Este producto ya no existe en el inventario.');
+      if (!DB.esErrorDeConexion(err)) throw new Error(DB.mensajeDeError(err));
       // Si falló por la conexión, se registra como venta sin internet (abajo).
       console.warn('Venta atómica no disponible, se guarda sin conexión', err);
     }
@@ -62,8 +63,11 @@ async function registrarVenta(datos) {
   return venta;
 }
 
-async function listarVentas({ desde = null, hasta = null } = {}) {
+// Las ventas anuladas se conservan (para saber qué pasó), pero no cuentan en
+// totales, ganancias ni reportes. Solo la lista de Ventas las muestra.
+async function listarVentas({ desde = null, hasta = null, incluirAnuladas = false } = {}) {
   let ventas = await DB.obtenerTodos(DB.STORES.ventas);
+  if (!incluirAnuladas) ventas = ventas.filter((v) => !v.anulada);
   // Los campos "desde"/"hasta" vienen de un selector de fecha (solo día, sin hora),
   // y hay que interpretarlos como el inicio y el final de ESE día en la hora local
   // del teléfono. Si se comparan tal cual (sin hora), JavaScript los toma como
@@ -75,13 +79,37 @@ async function listarVentas({ desde = null, hasta = null } = {}) {
   return ventas;
 }
 
-async function eliminarVenta(id) {
-  // Devuelve el stock al inventario si se anula la venta
-  const venta = await DB.obtener(DB.STORES.ventas, id);
-  if (venta) {
-    await Inventario.ajustarStock(venta.productoId, venta.cantidad);
+// Anula una venta: la marca como anulada (no se borra) y devuelve el stock.
+async function anularVenta(id) {
+  const usuario = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+  const datos = {
+    anuladaEl: new Date().toISOString(),
+    anuladaPor: (usuario && usuario.email) || '',
+  };
+
+  if (navigator.onLine) {
+    try {
+      const r = await DB.anularVentaEnTransaccion(id, datos);
+      if (r.productoExiste) Catalogo.actualizarDisponibilidad(r.productoId).catch((e) => console.warn('Catálogo no sincronizado', e));
+      return r;
+    } catch (err) {
+      if (err.code === 'ya-anulada') throw new Error('Esta venta ya estaba anulada (quizás desde el otro celular).');
+      if (err.code === 'no-existe') throw new Error('Esta venta ya no existe.');
+      if (!DB.esErrorDeConexion(err)) throw new Error(DB.mensajeDeError(err));
+      console.warn('Anulación atómica no disponible, se guarda sin conexión', err);
+    }
   }
-  return DB.eliminar(DB.STORES.ventas, id);
+
+  // Sin internet: se guarda en el teléfono y se sincroniza al volver la señal.
+  const venta = await DB.obtener(DB.STORES.ventas, id);
+  if (!venta) throw new Error('Esta venta ya no existe.');
+  if (venta.anulada) throw new Error('Esta venta ya estaba anulada.');
+  const producto = venta.productoId ? await DB.obtener(DB.STORES.productos, venta.productoId) : null;
+  // Sin internet, Firestore guarda los cambios en el teléfono pero la promesa
+  // no termina hasta que vuelve la señal: no se espera para no trabar la pantalla.
+  DB.actualizar(DB.STORES.ventas, { ...venta, anulada: true, ...datos }).catch((e) => console.warn(e));
+  if (producto) Inventario.ajustarStock(venta.productoId, Number(venta.cantidad) || 0).catch((e) => console.warn(e));
+  return { productoId: venta.productoId || null, productoExiste: !!producto };
 }
 
 async function resumen({ desde = null, hasta = null } = {}) {
@@ -109,6 +137,6 @@ async function resumen({ desde = null, hasta = null } = {}) {
 window.Ventas = {
   registrarVenta,
   listarVentas,
-  eliminarVenta,
+  anularVenta,
   resumen,
 };

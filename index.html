@@ -58,7 +58,25 @@
         </div>
       </div>
     </div>
+    <div class="resumen-mes">
+      <div class="titulo-mes" id="tituloMes">Este mes</div>
+      <div class="resumen-grid tres">
+        <div class="card"><div><div class="valor" id="resumenVendidoMes">L. 0</div><div class="etiqueta">Vendido</div></div></div>
+        <div class="card"><div><div class="valor" id="resumenGananciaMes">L. 0</div><div class="etiqueta">Ganancia</div></div></div>
+        <div class="card"><div><div class="valor" id="resumenMargenMes">0%</div><div class="etiqueta">Margen</div></div></div>
+      </div>
+      <p class="nota-margen" id="notaMargenMes"></p>
+    </div>
     <div id="listaVentas"><div class="cargando">Cargando ventas...</div></div>
+  </section>
+
+  <!-- ================= COMPRAS ================= -->
+  <section id="vista-compras" class="vista">
+    <div class="resumen-grid">
+      <div class="card"><div><div class="valor" id="resumenComprasMes">L. 0</div><div class="etiqueta">Comprado este mes</div></div></div>
+      <div class="card"><div><div class="valor" id="resumenUnidadesMes">0</div><div class="etiqueta">Unidades este mes</div></div></div>
+    </div>
+    <div id="listaCompras"><div class="cargando">Cargando compras...</div></div>
   </section>
 
   <!-- ================= CLIENTES ================= -->
@@ -143,6 +161,7 @@
   <button class="tab activo" data-vista="inventario"><span class="emoji">🌱</span>Inventario</button>
   <button class="tab" data-vista="agotados" id="tabAgotados"><span class="emoji">⛔<span class="insignia" id="insigniaAgotados" hidden></span></span>Agotados</button>
   <button class="tab" data-vista="ventas"><span class="emoji">💰</span>Ventas</button>
+  <button class="tab" data-vista="compras"><span class="emoji">🛒</span>Compras</button>
   <button class="tab" data-vista="clientes"><span class="emoji">👤</span>Clientes</button>
   <button class="tab" data-vista="proveedores"><span class="emoji">🚚</span>Proveedores</button>
   <button class="tab" data-vista="reportes"><span class="emoji">📊</span>Reportes</button>
@@ -319,6 +338,30 @@
 </div>
 
 <!-- ============ MODAL: Venta ============ -->
+<div class="modal-overlay" id="modalCompra">
+  <div class="modal">
+    <h2>🛒 Registrar compra</h2>
+    <label>Producto que compraste</label>
+    <select id="campoProductoCompra"></select>
+    <p class="nota-envio">¿Es un producto nuevo? Primero agrégalo en Inventario con el botón "+", con stock 0, y luego registra aquí la compra.</p>
+    <label>Proveedor (opcional)</label>
+    <select id="campoProveedorCompra"></select>
+    <label>Cantidad</label>
+    <input type="number" id="campoCantidadCompra" min="1" step="1" value="1" inputmode="numeric">
+    <label>Costo por unidad (L.)</label>
+    <input type="number" id="campoCostoCompra" min="0" step="0.01" inputmode="decimal">
+    <label>Fecha de la compra</label>
+    <input type="date" id="campoFechaCompra">
+    <label>Nota (opcional)</label>
+    <input type="text" id="campoNotaCompra" maxlength="200" placeholder="Ej.: factura 123, vivero de Comayagua">
+    <div class="vista-previa-compra" id="previaCompra"></div>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarCompra">Cancelar</button>
+      <button class="btn" id="btnConfirmarCompra">Guardar compra</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalVenta">
   <div class="modal">
     <h2>Registrar venta</h2>
@@ -403,6 +446,7 @@
 <script src="js/clientes.js"></script>
 <script src="js/proveedores.js"></script>
 <script src="js/ventas.js"></script>
+<script src="js/compras.js"></script>
 <script src="js/reportes.js"></script>
 <script src="js/backup.js"></script>
 <script src="js/app.js"></script>

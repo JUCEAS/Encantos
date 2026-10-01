@@ -41,7 +41,7 @@ async function historialDeCliente(clienteId) {
   const mapaProductos = new Map(productos.map((p) => [p.id, p]));
 
   return ventas
-    .filter((v) => v.clienteId === clienteId)
+    .filter((v) => v.clienteId === clienteId && !v.anulada)
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
     .map((v) => ({
       ...v,

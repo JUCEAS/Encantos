@@ -16,7 +16,7 @@ async function exportarRespaldo() {
 // Revisa que el archivo sea realmente un respaldo de Encantos antes de tocar
 // los datos. Importar reemplaza TODO lo que hay en la nube (en ambos celulares).
 function validarRespaldo(datos) {
-  const colecciones = ['productos', 'clientes', 'ventas', 'proveedores'];
+  const colecciones = ['productos', 'clientes', 'ventas', 'proveedores', 'compras'];
   const esObjeto = datos && typeof datos === 'object' && !Array.isArray(datos);
   if (!esObjeto || !colecciones.some((c) => Array.isArray(datos[c]))) {
     throw new Error('Este archivo no es un respaldo de Encantos. No se cambió nada.');

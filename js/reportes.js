@@ -40,8 +40,18 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
   y += 5;
   doc.text(`Ganancia total: ${formatoLempiras(totalGanancia)}`, margenIzq, y);
   y += 5;
+  // Margen = ganancia ÷ total vendido (de cada L.100 vendidos, cuánto se gana)
+  const margen = totalVendido > 0 ? (totalGanancia / totalVendido) * 100 : 0;
+  doc.text(`Margen de ganancia: ${totalVendido > 0 ? margen.toFixed(1) + '%' : '—'}`, margenIzq, y);
+  y += 5;
   doc.text(`Número de ventas: ${ventas.length}`, margenIzq, y);
-  y += 10;
+  y += 5;
+  try {
+    const { compras, total } = await Compras.totalComprado({ desde, hasta });
+    doc.text(`Compras de mercadería: ${formatoLempiras(total)} (${compras.length} compra${compras.length === 1 ? '' : 's'})`, margenIzq, y);
+    y += 5;
+  } catch (e) { console.warn('No se pudieron leer las compras', e); }
+  y += 5;
 
   doc.setFontSize(12);
   doc.text('Productos más vendidos', margenIzq, y);

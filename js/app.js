@@ -28,10 +28,11 @@ function cambiarVista(nombre) {
   document.getElementById('vista-' + vista).classList.add('activa');
   document.querySelectorAll('.tabbar .tab').forEach((b) => b.classList.toggle('activo', b.dataset.vista === nombre));
 
-  document.getElementById('btnAgregar').style.display = (nombre === 'inventario' || nombre === 'clientes' || nombre === 'proveedores') ? 'block' : 'none';
+  document.getElementById('btnAgregar').style.display = (nombre === 'inventario' || nombre === 'compras' || nombre === 'clientes' || nombre === 'proveedores') ? 'block' : 'none';
 
   if (vista === 'inventario') refrescarInventario();
   if (nombre === 'ventas') refrescarVentas();
+  if (nombre === 'compras') refrescarCompras();
   if (nombre === 'clientes') refrescarClientes();
   if (nombre === 'proveedores') refrescarProveedores();
 }
@@ -42,11 +43,12 @@ document.getElementById('btnAgregar').addEventListener('click', () => {
   if (vistaActiva === 'vista-inventario') abrirModalProducto();
   if (vistaActiva === 'vista-clientes') abrirModalCliente();
   if (vistaActiva === 'vista-proveedores') abrirModalProveedor();
+  if (vistaActiva === 'vista-compras') abrirModalCompra();
 });
 
 // Menú de acciones (reemplaza los confirm "Aceptar = … / Cancelar = …",
 // que eran confusos). Devuelve el id de la opción elegida o null.
-function elegirAccion(titulo, opciones, mensaje = '') {
+function elegirAccion(titulo, opciones, mensaje = '', textoCancelar = 'Cancelar') {
   return new Promise((resolve) => {
     const velo = document.createElement('div');
     velo.className = 'modal-overlay activo menu-acciones';
@@ -55,7 +57,7 @@ function elegirAccion(titulo, opciones, mensaje = '') {
         <h2>${escaparHtml(titulo)}</h2>
         ${mensaje ? `<p class="mensaje-accion">${escaparHtml(mensaje)}</p>` : ''}
         ${opciones.map((o) => `<button class="btn ${o.principal ? '' : 'secundario'}" data-accion="${escaparHtml(o.id)}">${escaparHtml(o.texto)}</button>`).join('')}
-        <button class="btn btn-cancelar" data-accion="">Cancelar</button>
+        <button class="btn btn-cancelar" data-accion="">${escaparHtml(textoCancelar)}</button>
       </div>`;
     const cerrar = (valor) => { velo.remove(); resolve(valor || null); };
     velo.addEventListener('click', (e) => {
@@ -190,17 +192,21 @@ async function mostrarOpcionesProducto(id) {
   if ((Number(producto.stock) || 0) <= 0) {
     // Sin existencias: no se ofrece vender
     const accion = await elegirAccion(producto.nombre, [
-      { id: 'editar', texto: '✏️ Actualizar stock / editar', principal: true },
-    ], '⛔ No se puede vender: no hay existencias (stock 0). Si recibiste más, actualiza la cantidad en stock.');
-    if (accion === 'editar') abrirModalProducto(producto);
+      { id: 'comprar', texto: '🛒 Registrar compra (reabastecer)', principal: true },
+      { id: 'editar', texto: '✏️ Editar o eliminar' },
+    ], '⛔ No se puede vender: no hay existencias (stock 0). Si compraste más, registra la compra.');
+    if (accion === 'comprar') abrirModalCompra(producto);
+    else if (accion === 'editar') abrirModalProducto(producto);
     return;
   }
 
   const accion = await elegirAccion(producto.nombre, [
     { id: 'vender', texto: '💰 Vender', principal: true },
+    { id: 'comprar', texto: '🛒 Registrar compra' },
     { id: 'editar', texto: '✏️ Editar o eliminar' },
   ]);
   if (accion === 'vender') abrirModalVenta(producto);
+  else if (accion === 'comprar') abrirModalCompra(producto);
   else if (accion === 'editar') abrirModalProducto(producto);
 }
 
@@ -707,24 +713,26 @@ document.getElementById('btnConfirmarVenta').addEventListener('click', async () 
 
 async function refrescarVentas() {
   const contenedor = document.getElementById('listaVentas');
-  const ventas = await Ventas.listarVentas();
+  const ventas = await Ventas.listarVentas({ incluirAnuladas: true });
 
   const hoy = new Date().toDateString();
-  const ventasHoy = ventas.filter((v) => new Date(v.fecha).toDateString() === hoy);
+  const ventasHoy = ventas.filter((v) => !v.anulada && new Date(v.fecha).toDateString() === hoy);
   document.getElementById('resumenTotalHoy').textContent = 'L. ' + ventasHoy.reduce((s, v) => s + v.total, 0).toFixed(2);
   document.getElementById('resumenGananciaHoy').textContent = 'L. ' + ventasHoy.reduce((s, v) => s + v.ganancia, 0).toFixed(2);
+  actualizarResumenMes(ventas);
 
   if (ventas.length === 0) {
     contenedor.innerHTML = '<div class="vacio">Aún no hay ventas registradas.</div>';
     return;
   }
 
-  contenedor.innerHTML = ventas.map((v) => `
-    <div class="card" data-id="${v.id}">
+  contenedor.innerHTML = '<p class="ayuda-lista">Toca una venta para anularla.</p>' + ventas.map((v) => `
+    <div class="card${v.anulada ? ' venta-anulada' : ''}" data-id="${escaparHtml(v.id)}">
       <div class="info">
-        <h3>${escaparHtml(v.nombreProducto)} &times;${v.cantidad}</h3>
+        <h3>${escaparHtml(v.nombreProducto)} &times;${Number(v.cantidad) || 0}${v.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}</h3>
         <p>${new Date(v.fecha).toLocaleString()}</p>
-        <p class="precio">Total: L. ${v.total.toFixed(2)} &middot; Ganancia: L. ${v.ganancia.toFixed(2)}</p>
+        <p class="precio">Total: L. ${(Number(v.total) || 0).toFixed(2)} &middot; Ganancia: L. ${(Number(v.ganancia) || 0).toFixed(2)}</p>
+        ${v.anulada ? `<p class="nota-anulada">Anulada el ${new Date(v.anuladaEl).toLocaleString()}${v.anuladaPor ? ' por ' + escaparHtml(v.anuladaPor) : ''}</p>` : ''}
       </div>
     </div>
   `).join('');
@@ -734,14 +742,195 @@ async function refrescarVentas() {
   });
 }
 
+// ---------- Resumen del mes: vendido, ganancia y % de margen ----------
+// Margen = ganancia ÷ total vendido. Ej.: vendieron L.10,000 y ganaron L.2,000 → 20%.
+function inicioDeMes() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function formatoL(n) {
+  return 'L. ' + (Number(n) || 0).toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function actualizarResumenMes(ventas) {
+  const desde = inicioDeMes();
+  const delMes = ventas.filter((v) => !v.anulada && new Date(v.fecha) >= desde);
+  const vendido = delMes.reduce((s, v) => s + (Number(v.total) || 0), 0);
+  const ganancia = delMes.reduce((s, v) => s + (Number(v.ganancia) || 0), 0);
+  const margen = vendido > 0 ? (ganancia / vendido) * 100 : 0;
+  const nombreMes = desde.toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
+  document.getElementById('tituloMes').textContent = '📅 ' + nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+  document.getElementById('resumenVendidoMes').textContent = formatoL(vendido);
+  document.getElementById('resumenGananciaMes').textContent = formatoL(ganancia);
+  const elMargen = document.getElementById('resumenMargenMes');
+  elMargen.textContent = vendido > 0 ? margen.toFixed(1) + '%' : '—';
+  elMargen.classList.toggle('margen-bajo', vendido > 0 && margen < 10);
+
+  // Ventas de productos sin costo registrado: su ganancia sale "inflada"
+  const sinCosto = delMes.filter((v) => !(Number(v.costoUnitario) > 0)).length;
+  let nota = vendido > 0
+    ? `De cada L. 100 vendidos, les quedan L. ${margen.toFixed(0)} de ganancia (${delMes.length} venta${delMes.length === 1 ? '' : 's'} este mes).`
+    : 'Aún no hay ventas este mes.';
+  try {
+    const { total } = await Compras.totalComprado({ desde: desde.toISOString().slice(0, 10) });
+    if (total > 0) nota += ` Compras del mes: ${formatoL(total)}.`;
+  } catch (e) { console.warn(e); }
+  if (sinCosto) nota += ` ⚠️ ${sinCosto} venta${sinCosto === 1 ? '' : 's'} de productos sin costo registrado: el margen sale más alto de lo real.`;
+  document.getElementById('notaMargenMes').textContent = nota;
+}
+
 async function mostrarOpcionesVenta(id) {
-  const ventas = await Ventas.listarVentas();
+  const ventas = await Ventas.listarVentas({ incluirAnuladas: true });
   const venta = ventas.find((v) => v.id === id);
   if (!venta) return;
-  if (!confirm(`${venta.nombreProducto} x${venta.cantidad}\nTotal: L. ${venta.total.toFixed(2)}\n\n¿Anular esta venta? El stock vendido regresará al inventario.`)) return;
-  await Ventas.eliminarVenta(id);
-  refrescarVentas();
-  refrescarInventario();
+  const detalle = `${venta.nombreProducto} ×${venta.cantidad} · Total L. ${(Number(venta.total) || 0).toFixed(2)} · ${new Date(venta.fecha).toLocaleString()}`;
+  if (venta.anulada) {
+    await elegirAccion('Venta anulada', [], detalle + ' · Ya no cuenta en los totales ni en los reportes.', 'Cerrar');
+    return;
+  }
+  const accion = await elegirAccion('¿Anular esta venta?', [
+    { id: 'anular', texto: '↩️ Sí, anular y devolver al inventario', principal: true },
+  ], detalle);
+  if (accion !== 'anular') return;
+  try {
+    const r = await Ventas.anularVenta(id);
+    refrescarVentas();
+    refrescarInventario(document.getElementById('buscarTexto').value);
+    if (!r.productoExiste) alert('Venta anulada. El producto ya no existe en el inventario, así que no se devolvió stock.');
+  } catch (err) {
+    alert(err.message || 'No se pudo anular la venta. Revisa tu conexión e intenta de nuevo.');
+  }
+}
+
+// =========================================================
+// COMPRAS
+// =========================================================
+
+let compraProductos = [];
+
+async function abrirModalCompra(productoElegido = null) {
+  const [productos, proveedores] = await Promise.all([Inventario.listarProductos(), Proveedores.listarProveedores()]);
+  compraProductos = productos.slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+  const selProd = document.getElementById('campoProductoCompra');
+  selProd.innerHTML = '<option value="">— Elige el producto —</option>' + compraProductos.map((p) =>
+    `<option value="${escaparHtml(p.id)}">${escaparHtml(p.nombre)} (stock: ${Number(p.stock) || 0})</option>`).join('');
+  const selProv = document.getElementById('campoProveedorCompra');
+  selProv.innerHTML = '<option value="">— Sin proveedor —</option>' + proveedores.map((pr) =>
+    `<option value="${escaparHtml(pr.id)}">${escaparHtml(pr.nombre)}${pr.empresa ? ' · ' + escaparHtml(pr.empresa) : ''}</option>`).join('');
+  selProd.value = productoElegido ? productoElegido.id : '';
+  document.getElementById('campoCantidadCompra').value = 1;
+  document.getElementById('campoFechaCompra').value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  document.getElementById('campoNotaCompra').value = '';
+  alCambiarProductoCompra();
+  mostrarModal('modalCompra');
+}
+
+function alCambiarProductoCompra() {
+  const p = compraProductos.find((x) => x.id === document.getElementById('campoProductoCompra').value);
+  document.getElementById('campoCostoCompra').value = p && Number(p.costo) > 0 ? Number(p.costo).toFixed(2) : '';
+  if (p && p.proveedorId) document.getElementById('campoProveedorCompra').value = p.proveedorId;
+  actualizarPreviaCompra();
+}
+
+function actualizarPreviaCompra() {
+  const caja = document.getElementById('previaCompra');
+  const p = compraProductos.find((x) => x.id === document.getElementById('campoProductoCompra').value);
+  const cantidad = parseInt(document.getElementById('campoCantidadCompra').value, 10) || 0;
+  const costo = parseFloat(document.getElementById('campoCostoCompra').value);
+  if (!p || cantidad < 1 || !(costo >= 0)) { caja.innerHTML = ''; return; }
+  const stock = Number(p.stock) || 0;
+  const nuevoCosto = Compras.costoPromedio(stock, p.costo, cantidad, costo);
+  const precio = Number(p.precio) || 0;
+  const margen = precio > 0 ? ((precio - nuevoCosto) / precio) * 100 : null;
+  caja.innerHTML = `
+    Total de la compra: <b>${formatoL(cantidad * costo)}</b><br>
+    Stock: ${stock} → <b>${stock + cantidad}</b><br>
+    Costo por unidad: ${formatoL(p.costo)} → <b>${formatoL(nuevoCosto)}</b> (promedio)<br>
+    ${margen !== null ? `Vendiendo a ${formatoL(precio)}, ganarían <b>${margen.toFixed(0)}%</b> por unidad.` : 'Este producto no tiene precio de venta.'}`;
+}
+
+document.getElementById('campoProductoCompra').addEventListener('change', alCambiarProductoCompra);
+['campoCantidadCompra', 'campoCostoCompra'].forEach((id) => document.getElementById(id).addEventListener('input', actualizarPreviaCompra));
+document.getElementById('btnCancelarCompra').addEventListener('click', () => ocultarModal('modalCompra'));
+
+document.getElementById('btnConfirmarCompra').addEventListener('click', async () => {
+  const boton = document.getElementById('btnConfirmarCompra');
+  if (boton.disabled) return;
+  boton.disabled = true;
+  try {
+    const compra = await Compras.registrarCompra({
+      productoId: document.getElementById('campoProductoCompra').value,
+      proveedorId: document.getElementById('campoProveedorCompra').value,
+      cantidad: document.getElementById('campoCantidadCompra').value,
+      costoUnitario: document.getElementById('campoCostoCompra').value,
+      fecha: document.getElementById('campoFechaCompra').value,
+      nota: document.getElementById('campoNotaCompra').value,
+    });
+    ocultarModal('modalCompra');
+    refrescarCompras();
+    refrescarInventario(document.getElementById('buscarTexto').value);
+    alert(`✅ Compra guardada: ${compra.nombreProducto} +${compra.cantidad}.`);
+  } catch (err) {
+    alert(err.message || 'No se pudo guardar la compra.');
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+async function refrescarCompras() {
+  const contenedor = document.getElementById('listaCompras');
+  if (!contenedor) return;
+  const compras = await Compras.listarCompras({ incluirAnuladas: true });
+  const desde = inicioDeMes();
+  const delMes = compras.filter((c) => !c.anulada && new Date(c.fecha) >= desde);
+  document.getElementById('resumenComprasMes').textContent = formatoL(delMes.reduce((s, c) => s + (Number(c.total) || 0), 0));
+  document.getElementById('resumenUnidadesMes').textContent = String(delMes.reduce((s, c) => s + (Number(c.cantidad) || 0), 0));
+
+  if (compras.length === 0) {
+    contenedor.innerHTML = '<div class="vacio">Aún no hay compras. Toca "+" para registrar la primera.</div>';
+    return;
+  }
+  contenedor.innerHTML = '<p class="ayuda-lista">Toca una compra para ver el detalle o anularla.</p>' + compras.map((c) => `
+    <div class="card${c.anulada ? ' compra-anulada' : ''}" data-id="${escaparHtml(c.id)}">
+      <div class="info">
+        <h3>${escaparHtml(c.nombreProducto)} +${Number(c.cantidad) || 0}${c.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}</h3>
+        <p>${new Date(c.fecha).toLocaleDateString()}${c.nombreProveedor ? ' · 🚚 ' + escaparHtml(c.nombreProveedor) : ''}</p>
+        <p class="precio">Total: ${formatoL(c.total)} &middot; ${formatoL(c.costoUnitario)} c/u</p>
+        ${c.nota ? `<p style="font-size:12px;color:#888;">📝 ${escaparHtml(c.nota)}</p>` : ''}
+        ${c.anulada ? `<p class="nota-anulada">Anulada el ${new Date(c.anuladaEl).toLocaleString()}${c.anuladaPor ? ' por ' + escaparHtml(c.anuladaPor) : ''}</p>` : ''}
+      </div>
+    </div>`).join('');
+  contenedor.querySelectorAll('.card[data-id]').forEach((card) => {
+    card.addEventListener('click', () => mostrarOpcionesCompra(card.dataset.id));
+  });
+}
+
+async function mostrarOpcionesCompra(id) {
+  const compras = await Compras.listarCompras({ incluirAnuladas: true });
+  const c = compras.find((x) => x.id === id);
+  if (!c) return;
+  const detalle = `${c.nombreProducto} +${c.cantidad} · ${formatoL(c.costoUnitario)} c/u · Total ${formatoL(c.total)} · ${new Date(c.fecha).toLocaleDateString()}` +
+    (c.registradaPor ? ` · Registró: ${c.registradaPor}` : '');
+  if (c.anulada) {
+    await elegirAccion('Compra anulada', [], detalle + ' · Ya no cuenta en los totales.', 'Cerrar');
+    return;
+  }
+  const accion = await elegirAccion('Compra', [
+    { id: 'anular', texto: '↩️ Anular compra (quitar del stock)' },
+  ], detalle, 'Cerrar');
+  if (accion !== 'anular') return;
+  const seguro = await elegirAccion('¿Anular esta compra?', [
+    { id: 'si', texto: 'Sí, anular', principal: true },
+  ], `Se quitarán ${c.cantidad} unidades de "${c.nombreProducto}" y se recalculará el costo.`);
+  if (seguro !== 'si') return;
+  try {
+    await Compras.anularCompra(id);
+    refrescarCompras();
+    refrescarInventario(document.getElementById('buscarTexto').value);
+  } catch (err) {
+    alert(err.message || 'No se pudo anular la compra.');
+  }
 }
 
 // =========================================================
@@ -1087,4 +1276,5 @@ DB.authReady.then(() => {
 DB.escucharCambios(DB.STORES.productos, () => refrescarInventario(document.getElementById('buscarTexto').value));
 DB.escucharCambios(DB.STORES.clientes, () => refrescarClientes(document.getElementById('buscarCliente').value));
 DB.escucharCambios(DB.STORES.ventas, () => refrescarVentas());
+DB.escucharCambios(DB.STORES.compras, () => refrescarCompras());
 DB.escucharCambios(DB.STORES.proveedores, () => refrescarProveedores(document.getElementById('buscarProveedor').value));
