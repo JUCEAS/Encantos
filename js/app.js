@@ -762,12 +762,35 @@ async function abrirModalVenta(producto) {
   mostrarModal('modalVenta');
 }
 
+// Desglose de una venta o de un período: venta − costo = ganancia, y los dos
+// porcentajes. Ej.: costó 200 y se vendió en 400 → ganancia 200,
+// 100% sobre el costo y 50% de la venta (margen).
+function desglose(total, ganancia) {
+  const t = Number(total) || 0;
+  const g = Number(ganancia) || 0;
+  const costo = t - g;
+  return {
+    venta: t,
+    costo,
+    ganancia: g,
+    sobreCosto: costo > 0 ? (g / costo) * 100 : null,
+    sobreVenta: t > 0 ? (g / t) * 100 : null,
+  };
+}
+function pct(n) { return n === null ? '—' : `${Math.round(n * 10) / 10}%`; }
+
 function actualizarGananciaEstimada() {
   if (!ventaProductoActual) return;
   const cantidad = parseInt(document.getElementById('campoCantidadVenta').value, 10) || 0;
   const precio = parseFloat(document.getElementById('campoPrecioVenta').value) || 0;
-  const ganancia = (precio - (ventaProductoActual.costo || 0)) * cantidad;
-  document.getElementById('gananciaEstimada').textContent = `L. ${ganancia.toFixed(2)}`;
+  const costoU = Number(ventaProductoActual.costo) || 0;
+  const d = desglose(precio * cantidad, (precio - costoU) * cantidad);
+  document.getElementById('desgloseVenta').innerHTML = `
+    <div><span>Precio de venta (${cantidad} × ${formatoL(precio)})</span><b>${formatoL(d.venta)}</b></div>
+    <div><span>− Costo (${cantidad} × ${formatoL(costoU)}, incluye transporte)</span><b>${formatoL(d.costo)}</b></div>
+    <div class="total"><span>= Ganancia</span><b id="gananciaEstimada" class="${d.ganancia < 0 ? 'negativa' : ''}">${formatoL(d.ganancia)}</b></div>
+    <div class="pcts"><span>📈 ${pct(d.sobreCosto)} sobre el costo</span><span>${pct(d.sobreVenta)} de la venta</span></div>
+    ${costoU > 0 ? '' : '<div class="aviso">⚠️ Este producto no tiene costo registrado: la ganancia sale más alta de lo real.</div>'}`;
 }
 
 document.getElementById('campoCantidadVenta').addEventListener('input', actualizarGananciaEstimada);
@@ -836,7 +859,9 @@ async function refrescarVentas() {
       <div class="info">
         <h3>${escaparHtml(v.nombreProducto)} &times;${Number(v.cantidad) || 0}${v.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}${v.corregida ? ' <span class="chip corregida">CORREGIDA</span>' : ''}${v.corrigeA ? ' <span class="chip">✏️ corrección</span>' : ''}</h3>
         <p>${new Date(v.fecha).toLocaleString()}</p>
-        <p class="precio">Total: L. ${(Number(v.total) || 0).toFixed(2)} &middot; Ganancia: L. ${(Number(v.ganancia) || 0).toFixed(2)}</p>
+        ${(() => { const d = desglose(v.total, v.ganancia); return `
+        <p class="precio">Venta ${formatoL(d.venta)} − Costo ${formatoL(d.costo)} = Ganancia ${formatoL(d.ganancia)}</p>
+        <p class="pct-venta">📈 ${pct(d.sobreCosto)} sobre el costo &middot; ${pct(d.sobreVenta)} de la venta</p>`; })()}
         ${v.anulada ? `<p class="nota-anulada">${escaparHtml(textoAnulacion(v, true))}</p>` : ''}
         ${v.corregida ? `<p class="nota-anulada">Corregida el ${new Date(v.corregidaEl).toLocaleString()}${v.corregidaPor ? ' por ' + escaparHtml(v.corregidaPor) : ''}. No cuenta en los totales.</p>` : ''}
       </div>
@@ -911,17 +936,22 @@ async function actualizarResumenMes(ventas) {
   const delMes = delMesElegido(ventas, mesVentas).filter((v) => !v.anulada && !v.corregida);
   const vendido = delMes.reduce((s, v) => s + (Number(v.total) || 0), 0);
   const ganancia = delMes.reduce((s, v) => s + (Number(v.ganancia) || 0), 0);
-  const margen = vendido > 0 ? (ganancia / vendido) * 100 : 0;
+  const d = desglose(vendido, ganancia);
+  const margen = d.sobreVenta || 0;
   document.getElementById('resumenVendidoMes').textContent = formatoL(vendido);
+  document.getElementById('resumenCostoMes').textContent = formatoL(d.costo);
   document.getElementById('resumenGananciaMes').textContent = formatoL(ganancia);
+  document.getElementById('resumenSobreCostoMes').textContent = pct(d.sobreCosto);
   const elMargen = document.getElementById('resumenMargenMes');
-  elMargen.textContent = vendido > 0 ? margen.toFixed(1) + '%' : '—';
+  elMargen.textContent = pct(d.sobreVenta);
   elMargen.classList.toggle('margen-bajo', vendido > 0 && margen < 10);
 
   // Ventas de productos sin costo registrado: su ganancia sale "inflada"
   const sinCosto = delMes.filter((v) => !(Number(v.costoUnitario) > 0)).length;
   let nota = vendido > 0
-    ? `De cada L. 100 vendidos, les quedan L. ${margen.toFixed(0)} de ganancia (${delMes.length} venta${delMes.length === 1 ? '' : 's'} en el mes).`
+    ? `Vendieron ${formatoL(vendido)} en plantas que les costaron ${formatoL(d.costo)}: ganaron ${formatoL(ganancia)}. ` +
+      `Eso es ${pct(d.sobreCosto)} sobre lo que costaron, o ${pct(d.sobreVenta)} de lo vendido (de cada L. 100 que entran, L. ${Math.round(margen)} son ganancia). ` +
+      `${delMes.length} venta${delMes.length === 1 ? '' : 's'} en el mes.`
     : 'No hay ventas en este mes.';
   try {
     const { desde, hasta } = limitesDeMes(mesVentas);
@@ -937,8 +967,12 @@ async function mostrarOpcionesVenta(id) {
   const venta = ventas.find((v) => v.id === id);
   if (!venta) return;
   const cliente = venta.clienteId ? (await Clientes.listarClientes()).find((c) => c.id === venta.clienteId) : null;
-  const detalle = `${venta.nombreProducto} ×${venta.cantidad} a ${formatoL(venta.precioUnitario)} · Total ${formatoL(venta.total)}\n` +
-    `${new Date(venta.fecha).toLocaleString()}${cliente ? ' · Cliente: ' + cliente.nombre : ''}`;
+  const d = desglose(venta.total, venta.ganancia);
+  const detalle = `${venta.nombreProducto} ×${venta.cantidad} · ${new Date(venta.fecha).toLocaleString()}${cliente ? ' · Cliente: ' + cliente.nombre : ''}\n\n` +
+    `Precio de venta: ${venta.cantidad} × ${formatoL(venta.precioUnitario)} = ${formatoL(d.venta)}\n` +
+    `− Costo: ${venta.cantidad} × ${formatoL(venta.costoUnitario)} = ${formatoL(d.costo)}\n` +
+    `= Ganancia: ${formatoL(d.ganancia)}\n` +
+    `📈 ${pct(d.sobreCosto)} sobre el costo · ${pct(d.sobreVenta)} de la venta`;
   if (venta.anulada) {
     await elegirAccion('Venta anulada', [], detalle + '\n\n' + textoAnulacion(venta, true) + '\nYa no cuenta en los totales ni en los reportes.', 'Cerrar');
     return;
