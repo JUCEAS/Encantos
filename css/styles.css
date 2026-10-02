@@ -351,3 +351,16 @@ nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .menu-acciones .m-error { color: var(--rojo); font-size: 13px; margin: 0; min-height: 0; }
 .menu-acciones .m-error:empty { display: none; }
 .menu-acciones textarea { font-family: inherit; }
+
+/* ---------- Desglose de ganancia ---------- */
+.resumen-grid.dos-pct { gap: 8px; margin-bottom: 4px; }
+.resumen-grid.dos-pct .card { padding: 10px 6px; }
+.resumen-grid.dos-pct .valor { font-size: 18px; }
+.valor.valor-costo { color: #8a6d1f !important; }
+.pct-venta { font-size: 12px; color: #4b6b46; margin: 2px 0 0; }
+.desglose-venta { background: #eef5ec; border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
+.desglose-venta div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.desglose-venta .total { border-top: 1px solid #c9dcc4; margin-top: 4px; padding-top: 6px; font-size: 15px; color: var(--verde); }
+.desglose-venta .pcts { color: #4b6b46; font-weight: 600; }
+.desglose-venta .aviso { color: #8a6d1f; font-size: 12px; }
+.desglose-venta b.negativa { color: var(--rojo); }
