@@ -66,8 +66,12 @@
       </div>
       <div class="resumen-grid tres">
         <div class="card"><div><div class="valor" id="resumenVendidoMes">L. 0</div><div class="etiqueta">Vendido</div></div></div>
+        <div class="card"><div><div class="valor valor-costo" id="resumenCostoMes">L. 0</div><div class="etiqueta">Costo</div></div></div>
         <div class="card"><div><div class="valor" id="resumenGananciaMes">L. 0</div><div class="etiqueta">Ganancia</div></div></div>
-        <div class="card"><div><div class="valor" id="resumenMargenMes">0%</div><div class="etiqueta">Margen</div></div></div>
+      </div>
+      <div class="resumen-grid dos-pct">
+        <div class="card"><div><div class="valor" id="resumenSobreCostoMes">—</div><div class="etiqueta">Ganancia sobre el costo</div></div></div>
+        <div class="card"><div><div class="valor" id="resumenMargenMes">—</div><div class="etiqueta">Margen sobre la venta</div></div></div>
       </div>
       <p class="nota-margen" id="notaMargenMes"></p>
     </div>
@@ -406,7 +410,7 @@
     <input type="number" id="campoCantidadVenta" min="1" value="1">
     <label>Precio de venta unitario (L.)</label>
     <input type="number" id="campoPrecioVenta" step="0.01" min="0">
-    <p style="font-size:13px;color:#666;">Ganancia estimada: <b id="gananciaEstimada">L. 0.00</b></p>
+    <div class="desglose-venta" id="desgloseVenta"></div>
     <div class="fila-botones">
       <button class="btn secundario" id="btnCancelarVenta">Cancelar</button>
       <button class="btn" id="btnConfirmarVenta">Confirmar venta</button>
