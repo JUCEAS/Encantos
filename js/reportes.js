@@ -38,11 +38,17 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
   doc.setFontSize(10);
   doc.text(`Total vendido: ${formatoLempiras(totalVendido)}`, margenIzq, y);
   y += 5;
+  // Desglose: venta − costo = ganancia, y los dos porcentajes
+  const costoVendido = totalVendido - totalGanancia;
+  doc.text(`Costo de lo vendido (incluye transporte): ${formatoLempiras(costoVendido)}`, margenIzq, y);
+  y += 5;
   doc.text(`Ganancia total: ${formatoLempiras(totalGanancia)}`, margenIzq, y);
   y += 5;
-  // Margen = ganancia ÷ total vendido (de cada L.100 vendidos, cuánto se gana)
-  const margen = totalVendido > 0 ? (totalGanancia / totalVendido) * 100 : 0;
-  doc.text(`Margen de ganancia: ${totalVendido > 0 ? margen.toFixed(1) + '%' : '—'}`, margenIzq, y);
+  const sobreCosto = costoVendido > 0 ? (totalGanancia / costoVendido) * 100 : null;
+  const margen = totalVendido > 0 ? (totalGanancia / totalVendido) * 100 : null;
+  doc.text(`Ganancia sobre el costo: ${sobreCosto === null ? '-' : sobreCosto.toFixed(1) + '%'}`, margenIzq, y);
+  y += 5;
+  doc.text(`Margen sobre la venta: ${margen === null ? '-' : margen.toFixed(1) + '%'}${margen === null ? '' : ` (de cada L. 100 vendidos, L. ${Math.round(margen)} son ganancia)`}`, margenIzq, y);
   y += 5;
   doc.text(`Número de ventas: ${ventas.length}`, margenIzq, y);
   y += 5;
@@ -62,19 +68,22 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
   y += 6;
   doc.setFontSize(9);
   doc.text('Producto', margenIzq, y);
-  doc.text('Cant.', 110, y);
-  doc.text('Total', 135, y);
-  doc.text('Ganancia', 165, y);
+  doc.text('Cant.', 100, y);
+  doc.text('Total', 118, y);
+  doc.text('Ganancia', 145, y);
+  doc.text('% s/costo', 175, y);
   y += 4;
   doc.line(margenIzq, y, 196, y);
   y += 4;
 
   masVendidos.slice(0, 15).forEach((item) => {
     if (y > 270) { doc.addPage(); y = 18; }
-    doc.text(item.nombre.substring(0, 40), margenIzq, y);
-    doc.text(String(item.cantidad), 110, y);
-    doc.text(formatoLempiras(item.total), 135, y);
-    doc.text(formatoLempiras(item.ganancia), 165, y);
+    doc.text(item.nombre.substring(0, 36), margenIzq, y);
+    doc.text(String(item.cantidad), 100, y);
+    doc.text(formatoLempiras(item.total), 118, y);
+    doc.text(formatoLempiras(item.ganancia), 145, y);
+    const costoItem = item.total - item.ganancia;
+    doc.text(costoItem > 0 ? `${Math.round((item.ganancia / costoItem) * 100)}%` : '-', 178, y);
     y += 5;
   });
 
