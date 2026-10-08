@@ -15,11 +15,12 @@ function normalizarTexto(t) {
   return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-// ¿Qué clientes (coleccionistas o mayoristas) están interesados en estas plantas?
+// ¿Qué clientes están interesados en estas plantas?
 // productos = [{ nombre, categoria }]. Devuelve [{ cliente, motivos, plantas }]
 function interesadosEn(productos, clientes) {
   const resultado = [];
-  clientes.filter((c) => c.tipo && c.tipo !== 'normal').forEach((c) => {
+  // Cualquier cliente con plantas buscadas o categorías marcadas
+  clientes.filter((c) => (c.deseos || []).length || (c.intereses || []).length).forEach((c) => {
     const motivos = new Set();
     const plantas = new Set();
     const deseos = (c.deseos || []).map((d) => ({ d, n: normalizarTexto(d) })).filter((x) => x.n.length >= 3);
