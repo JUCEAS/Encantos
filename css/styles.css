@@ -423,3 +423,16 @@ nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .resumen-lugares .r-fila small { color: #666; display: block; }
 .resumen-lugares .r-barra { height: 6px; background: var(--verde-claro); border-radius: 3px; margin-top: 6px; }
 .resumen-lugares .r-fila.gris { background: #f6f3ee; }
+
+/* ---------- Identificar planta con foto (Pl@ntNet) ---------- */
+.btn.btn-identificar { background: #fff; color: var(--verde); border: 2px solid var(--verde-claro); margin-top: 8px; }
+.identificar .id-foto { width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; }
+.identificar .id-lista { display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto; }
+.identificar .id-op { text-align: left; border: 1px solid var(--borde); background: #fff; border-radius: 10px; padding: 10px; font-family: inherit; font-size: 14px; cursor: pointer; color: #333; }
+.identificar .id-op b { display: block; font-style: italic; }
+.identificar .id-op small { display: block; color: #666; }
+.identificar .id-pct { float: right; font-weight: bold; color: var(--verde); font-style: normal; }
+.identificar .id-pct.baja { color: #a0703a; }
+.identificar .id-nota { font-size: 12px; color: #777; margin: 6px 0 0; }
+.identificar input { margin-bottom: 4px; }
+.identificar ol { padding-left: 18px; font-size: 13px; color: #444; margin: 4px 0 8px; }
