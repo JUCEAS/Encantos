@@ -1,5 +1,5 @@
 // Service Worker de Encantos — habilita el uso 100% sin internet
-const CACHE_NAME = 'encantos-cache-v32';
+const CACHE_NAME = 'encantos-cache-v33';
 const ASSETS = [
   './',
   './index.html',
