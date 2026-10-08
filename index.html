@@ -95,8 +95,9 @@
   <!-- ================= CLIENTES ================= -->
   <section id="vista-clientes" class="vista">
     <div class="buscador">
-      <input type="text" id="buscarCliente" placeholder="Buscar cliente...">
+      <input type="text" id="buscarCliente" placeholder="Buscar cliente o planta que busca...">
     </div>
+    <div class="filtro-tipos" id="filtroTiposCliente"></div>
     <div id="listaClientes"><div class="cargando">Cargando clientes...</div></div>
   </section>
 
@@ -426,6 +427,15 @@
     <input type="text" id="campoNombreCliente" placeholder="Nombre del cliente">
     <label>Celular</label>
     <input type="tel" id="campoCelularCliente" placeholder="9999-9999">
+    <label>Tipo de cliente</label>
+    <select id="campoTipoCliente"></select>
+    <div id="bloqueColeccionista" hidden>
+      <label>¿Qué le interesa? (marca las que apliquen)</label>
+      <div class="grupo-etiquetas" id="campoInteresesCliente"></div>
+      <label>Plantas que anda buscando (una por línea)</label>
+      <textarea id="campoDeseosCliente" rows="3" placeholder="Ej.:&#10;Monstera Thai Constellation&#10;Anthurium warocqueanum"></textarea>
+      <p class="nota-envio">💎 Cuando registren una compra con alguna de estas plantas o categorías, la app les avisará para ofrecérsela primero.</p>
+    </div>
     <label>Notas (opcional)</label>
     <textarea id="campoNotasCliente"></textarea>
     <div class="fila-botones">
