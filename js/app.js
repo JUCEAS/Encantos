@@ -254,8 +254,14 @@ async function mostrarOpcionesProducto(id) {
   const accion = await elegirAccion(producto.nombre, [
     { id: 'vender', texto: '💰 Vender', principal: true },
     { id: 'comprar', texto: '🛒 Registrar compra' },
+    { id: 'interesados', texto: '💎 ¿Quién busca esta planta?' },
     { id: 'editar', texto: '✏️ Editar o eliminar' },
   ]);
+  if (accion === 'interesados') {
+    const hay = await avisarInteresados([producto], `💎 Interesados en ${producto.nombre}`);
+    if (!hay) alert('Ningún coleccionista o mayorista tiene esta planta o su categoría en su lista. Puedes agregarla en la ficha del cliente.');
+    return;
+  }
   if (accion === 'vender') abrirModalVenta(producto);
   else if (accion === 'comprar') abrirModalCompra(producto);
   else if (accion === 'editar') abrirModalProducto(producto);
@@ -1265,6 +1271,14 @@ document.getElementById('btnConfirmarCompra').addEventListener('click', async ()
     const nuevos = factura.lineas.filter((l) => l.creadoEnFactura).length;
     alert(`${corrigiendo ? '✅ Corrección guardada. La compra anterior quedó como historial. Ahora' : '✅ Factura guardada:'} ${factura.lineas.length} producto${factura.lineas.length === 1 ? '' : 's'}, ${factura.unidades} unidades, total ${formatoL(factura.total)}.` +
       (nuevos ? `\n\n🆕 ${nuevos === 1 ? 'Se creó 1 producto nuevo' : `Se crearon ${nuevos} productos nuevos`} en Inventario (sin publicar en el catálogo). Agrégales foto y datos cuando puedas.` : ''));
+    // Avisar a coleccionistas que buscan alguna de estas plantas
+    if (!corrigiendo) {
+      try {
+        const productos = await Inventario.listarProductos();
+        const porId = new Map(productos.map((p) => [p.id, p]));
+        await avisarInteresados(factura.lineas.map((l) => ({ nombre: l.nombreProducto, categoria: (porId.get(l.productoId) || {}).categoria })));
+      } catch (e) { console.warn('No se pudo revisar coleccionistas', e); }
+    }
   } catch (err) {
     alert(err.message || 'No se pudo guardar la factura.');
   } finally {
@@ -1381,26 +1395,53 @@ async function mostrarOpcionesCompra(id) {
 // CLIENTES
 // =========================================================
 
+let filtroTipoCliente = ''; // '' = todos
+
 async function refrescarClientes(filtro = '') {
   const contenedor = document.getElementById('listaClientes');
-  const clientes = filtro ? await Clientes.buscarClientes(filtro) : await Clientes.listarClientes();
+  const todos = await Clientes.listarClientes();
+  // Filtros rápidos por tipo, con cuántos hay de cada uno
+  const cuenta = (t) => todos.filter((c) => (c.tipo || 'normal') === t).length;
+  const botones = [{ id: '', t: `Todos (${todos.length})` }]
+    .concat(Clientes.TIPOS_CLIENTE.filter((t) => t.id !== 'normal').map((t) => ({ id: t.id, t: `${t.emoji} ${t.texto.split(' (')[0]}s (${cuenta(t.id)})` })));
+  document.getElementById('filtroTiposCliente').innerHTML = botones.map((b) =>
+    `<button type="button" class="chip-filtro${filtroTipoCliente === b.id ? ' activo' : ''}" data-tipo="${b.id}">${escaparHtml(b.t)}</button>`).join('');
+  document.querySelectorAll('#filtroTiposCliente [data-tipo]').forEach((b) => b.addEventListener('click', () => {
+    filtroTipoCliente = b.dataset.tipo;
+    refrescarClientes(document.getElementById('buscarCliente').value);
+  }));
+
+  const q = filtro.trim().toLowerCase();
+  let clientes = q
+    ? todos.filter((c) => (c.nombre || '').toLowerCase().includes(q) || (c.celular || '').includes(q) ||
+        (c.deseos || []).some((d) => d.toLowerCase().includes(q)) || (c.intereses || []).some((d) => d.toLowerCase().includes(q)))
+    : todos;
+  if (filtroTipoCliente) clientes = clientes.filter((c) => (c.tipo || 'normal') === filtroTipoCliente);
 
   if (clientes.length === 0) {
-    contenedor.innerHTML = '<div class="vacio">Aún no hay clientes. Toca "+" para agregar el primero.</div>';
+    contenedor.innerHTML = todos.length
+      ? '<div class="vacio">No hay clientes con este filtro.</div>'
+      : '<div class="vacio">Aún no hay clientes. Toca "+" para agregar el primero.</div>';
     return;
   }
 
-  contenedor.innerHTML = clientes.map((c) => `
-    <div class="card" data-id="${c.id}">
+  contenedor.innerHTML = clientes.map((c) => {
+    const tipo = Clientes.tipoDe(c);
+    const especial = tipo.id !== 'normal';
+    return `
+    <div class="card${especial ? ' cliente-' + tipo.id : ''}" data-id="${escaparHtml(c.id)}">
       <div class="info">
-        <h3>${escaparHtml(c.nombre)}</h3>
+        <h3>${escaparHtml(c.nombre)}${especial ? ` <span class="chip tipo-${tipo.id}">${tipo.emoji} ${escaparHtml(tipo.texto.split(' (')[0])}</span>` : ''}</h3>
         <p>${escaparHtml(c.celular || 'Sin celular')}</p>
+        ${especial && (c.intereses || []).length ? `<p class="interes-cliente">Le interesa: ${escaparHtml(c.intereses.join(', '))}</p>` : ''}
+        ${especial && (c.deseos || []).length ? `<p class="interes-cliente">🔎 Busca: ${escaparHtml(c.deseos.join(', '))}</p>` : ''}
         ${c.creadoEl ? `<p style="font-size:12px;color:#888;">Cliente desde: ${new Date(c.creadoEl).toLocaleDateString()}</p>` : ''}
+        ${c.ultimoCatalogo ? `<p class="ultimo-catalogo">${escaparHtml(textoUltimoCatalogo(c))}</p>` : ''}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 
-  contenedor.querySelectorAll('.card').forEach((card) => {
+  contenedor.querySelectorAll('.card[data-id]').forEach((card) => {
     card.addEventListener('click', () => mostrarOpcionesCliente(card.dataset.id));
   });
 }
@@ -1412,11 +1453,177 @@ async function mostrarOpcionesCliente(id) {
   const cliente = clientes.find((c) => c.id === id);
   if (!cliente) return;
   const accion = await elegirAccion(cliente.nombre, [
-    { id: 'historial', texto: '🧾 Ver historial de compras', principal: true },
+    { id: 'catalogo', texto: '📤 Enviar catálogo por WhatsApp', principal: true },
+    { id: 'historial', texto: '🧾 Ver historial de compras' },
     { id: 'editar', texto: '✏️ Editar o eliminar' },
-  ]);
-  if (accion === 'historial') abrirHistorialCliente(cliente);
+  ], textoUltimoCatalogo(cliente));
+  if (accion === 'catalogo') enviarCatalogoACliente(cliente);
+  else if (accion === 'historial') abrirHistorialCliente(cliente);
   else if (accion === 'editar') abrirModalCliente(cliente);
+}
+
+function textoUltimoCatalogo(c) {
+  const u = c && c.ultimoCatalogo;
+  if (!u || !u.fecha) return '';
+  const fecha = new Date(u.fecha).toLocaleDateString('es-HN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `📤 Último catálogo enviado: ${fecha}${u.catalogos && u.catalogos.length ? ' · ' + u.catalogos.join(', ') : ''}`;
+}
+
+// ---------- Avisar a coleccionistas cuando llega una planta que buscan ----------
+async function avisarInteresados(productosNuevos, titulo = '💎 Coleccionistas interesados') {
+  const clientes = await Clientes.listarClientes();
+  const interesados = Clientes.interesadosEn(productosNuevos, clientes);
+  if (!interesados.length) return false;
+  const { negocio, yo } = await catalogosParaEnviar().catch(() => ({ negocio: 'Encantos', yo: null }));
+  const android = esAndroid();
+  const velo = document.createElement('div');
+  velo.className = 'modal-overlay activo menu-acciones avisos-coleccion';
+  velo.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2>${escaparHtml(titulo)}</h2>
+      <p class="mensaje-accion">${interesados.length === 1 ? 'Este cliente anda buscando' : `Estos ${interesados.length} clientes andan buscando`} algo de lo que acaba de llegar. Ofréceselo antes de publicarlo:</p>
+      ${interesados.map((x, i) => {
+        const tipo = Clientes.tipoDe(x.cliente);
+        const num = Clientes.numeroWhatsApp(x.cliente.celular);
+        return `
+        <div class="aviso-cliente">
+          <div><b>${tipo.emoji} ${escaparHtml(x.cliente.nombre)}</b><br><small>${escaparHtml(x.motivos.join(' · '))}</small><br><small>🌿 ${escaparHtml(x.plantas.join(', '))}</small></div>
+          ${num ? (android
+            ? `<div class="botones-wa"><button class="btn whatsapp chico" data-i="${i}" data-app="normal">WhatsApp</button><button class="btn whatsapp chico" data-i="${i}" data-app="business">Business</button></div>`
+            : `<button class="btn whatsapp chico" data-i="${i}" data-app="">WhatsApp</button>`)
+            : '<small class="sin-numero">Sin celular registrado</small>'}
+        </div>`;
+      }).join('')}
+      <button class="btn btn-cancelar" data-cerrar="1">Cerrar</button>
+    </div>`;
+  document.body.appendChild(velo);
+  velo.addEventListener('click', (e) => {
+    if (e.target === velo || e.target.closest('[data-cerrar]')) { velo.remove(); return; }
+    const b = e.target.closest('[data-app]');
+    if (!b) return;
+    const x = interesados[Number(b.dataset.i)];
+    const nombre = String(x.cliente.nombre || '').trim().split(/\s+/)[0];
+    const plantas = x.plantas.map((p) => `*${p}*`).join(', ');
+    const texto = `Hola ${nombre} 👋 ${yo && yo.nombre ? `Soy ${yo.nombre}, de ${negocio}. ` : ''}` +
+      `Te cuento que nos llegó ${plantas} 🌿 y me acordé de ti. ¿Te interesa? Te la puedo apartar antes de publicarla.`;
+    b.closest('.aviso-cliente').classList.add('avisado');
+    abrirChatWhatsApp(Clientes.numeroWhatsApp(x.cliente.celular), texto, b.dataset.app);
+  });
+  return true;
+}
+
+// ---------- Enviar catálogos a un cliente por WhatsApp ----------
+// Catálogos publicados (completo + por categoría) con la firma de quien envía,
+// para que los pedidos le lleguen a esa vendedora.
+async function catalogosParaEnviar() {
+  const [productos, config] = await Promise.all([Inventario.listarProductos(), Catalogo.obtenerConfig()]);
+  const publicados = productos.filter((p) => p.publicarCatalogo);
+  const cuentas = new Map();
+  publicados.forEach((p) => {
+    const c = Inventario.infoCategoria(p.categoria);
+    const act = cuentas.get(c.id) || { info: c, n: 0 };
+    act.n++;
+    cuentas.set(c.id, act);
+  });
+  const orden = Inventario.CATEGORIAS_INFO.map((c) => c.id);
+  const filas = publicados.length ? [{ id: '', emoji: '🌿', nombre: 'Catálogo completo', n: publicados.length, url: urlCatalogo('catalogo.html') }]
+    .concat([...cuentas.values()]
+      .sort((a, b) => orden.indexOf(a.info.id) - orden.indexOf(b.info.id))
+      .map(({ info, n }) => ({ id: info.id, emoji: info.emoji, nombre: info.nombre, n, url: urlCatalogo(`c/${info.id}.html`) }))) : [];
+  const yo = (config.vendedores || []).find((v) => v.correo && v.correo === correoSesion());
+  if (yo && yo.whatsapp) filas.forEach((f) => { f.url += '#v=' + yo.id; });
+  return { filas, negocio: config.negocio || 'Encantos', yo };
+}
+
+function mensajeCatalogo(cliente, elegidas, negocio, yo) {
+  const nombre = String(cliente.nombre || '').trim().split(/\s+/)[0];
+  const lineas = elegidas.map((f) => `${f.emoji} *${f.nombre}*: ${f.url}`);
+  return `Hola ${nombre} 👋 ${yo && yo.nombre ? `Soy ${yo.nombre}, de ${negocio}. ` : ''}` +
+    `Te comparto ${elegidas.length === 1 ? 'nuestro catálogo' : 'nuestros catálogos'} de plantas 🌿\n\n` +
+    lineas.join('\n') +
+    '\n\nAhí ves fotos, precios y cuidados de cada planta, y puedes hacer tu pedido directo. ¡Cualquier consulta, con gusto te ayudo!';
+}
+
+function esAndroid() { return /Android/i.test(navigator.userAgent || ''); }
+
+// Abre el chat del cliente con el mensaje listo. En Android se puede elegir
+// WhatsApp o WhatsApp Business; en otros teléfonos se usa wa.me.
+function abrirChatWhatsApp(numero, texto, app) {
+  const wa = `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+  if (esAndroid() && app) {
+    const paquete = app === 'business' ? 'com.whatsapp.w4b' : 'com.whatsapp';
+    location.href = `intent://send/?phone=${numero}&text=${encodeURIComponent(texto)}#Intent;scheme=whatsapp;package=${paquete};S.browser_fallback_url=${encodeURIComponent(wa)};end`;
+    return;
+  }
+  window.open(wa, '_blank', 'noopener');
+}
+
+async function enviarCatalogoACliente(cliente) {
+  const { filas, negocio, yo } = await catalogosParaEnviar();
+  if (!filas.length) {
+    alert('Todavía no hay plantas publicadas en el catálogo. Edita una planta y activa "Publicar en el catálogo para clientes".');
+    return;
+  }
+  const android = esAndroid();
+  // A un coleccionista se le marcan de entrada las categorías que colecciona
+  const interesCat = (cliente.intereses || []).filter((x) => filas.some((f) => f.id && f.nombre === x));
+  const velo = document.createElement('div');
+  velo.className = 'modal-overlay activo menu-acciones envio-catalogo';
+  velo.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2>📤 Enviar catálogo a ${escaparHtml(cliente.nombre)}</h2>
+      <label>WhatsApp del cliente</label>
+      <input type="tel" inputmode="tel" class="e-cel" value="${escaparHtml(cliente.celular || '')}" placeholder="Ej.: 9876-5432">
+      <label>¿Qué catálogos le envías?</label>
+      <div class="e-lista">${filas.map((f, i) => `
+        <label class="e-op"><input type="checkbox" data-i="${i}"${(interesCat.length ? interesCat.includes(f.nombre) : i === 0) ? ' checked' : ''}>
+          <span>${f.emoji} ${escaparHtml(f.nombre)}</span><small>${f.n} ${f.n === 1 ? 'planta' : 'plantas'}</small></label>`).join('')}
+      </div>
+      <label>Mensaje (lo puedes cambiar)</label>
+      <textarea class="e-texto" rows="7"></textarea>
+      <p class="m-error"></p>
+      ${android
+        ? `<div class="fila-botones"><button class="btn whatsapp" data-app="normal">WhatsApp</button><button class="btn whatsapp" data-app="business">WhatsApp Business</button></div>`
+        : '<button class="btn whatsapp" data-app="">Abrir WhatsApp</button>'}
+      <button class="btn btn-cancelar" data-cerrar="1">Cancelar</button>
+    </div>`;
+  document.body.appendChild(velo);
+  const texto = velo.querySelector('.e-texto');
+  const error = velo.querySelector('.m-error');
+  const checks = [...velo.querySelectorAll('.e-op input')];
+  let editado = false;
+  const elegidas = () => checks.filter((c) => c.checked).map((c) => filas[Number(c.dataset.i)]);
+  const actualizarTexto = () => { if (!editado) texto.value = mensajeCatalogo(cliente, elegidas(), negocio, yo); };
+  texto.addEventListener('input', () => { editado = true; });
+  checks.forEach((c) => c.addEventListener('change', () => {
+    // Si marca el catálogo completo, se desmarcan las categorías (y al revés)
+    if (c.checked && c.dataset.i === '0') checks.slice(1).forEach((x) => { x.checked = false; });
+    if (c.checked && c.dataset.i !== '0') checks[0].checked = false;
+    editado = false;
+    actualizarTexto();
+    error.textContent = '';
+  }));
+  actualizarTexto();
+  const cerrar = () => velo.remove();
+  velo.addEventListener('click', async (e) => {
+    if (e.target === velo || e.target.closest('[data-cerrar]')) { cerrar(); return; }
+    const b = e.target.closest('[data-app]');
+    if (!b) return;
+    const lista = elegidas();
+    if (!lista.length) { error.textContent = 'Marca al menos un catálogo.'; return; }
+    const cel = velo.querySelector('.e-cel').value;
+    const numero = Clientes.numeroWhatsApp(cel);
+    if (!numero) { error.textContent = 'Escribe un número de WhatsApp válido (8 dígitos, o con código de país).'; return; }
+    if (!texto.value.trim()) { error.textContent = 'El mensaje está vacío.'; return; }
+    // Guarda el número si era nuevo o cambió, y registra el envío en la ficha
+    try {
+      if (cel.trim() !== String(cliente.celular || '').trim()) await Clientes.actualizarCelular(cliente.id, cel);
+      await Clientes.registrarEnvioCatalogo(cliente.id, lista.map((f) => f.nombre));
+    } catch (err) { console.warn('No se pudo registrar el envío', err); }
+    cerrar();
+    refrescarClientes(document.getElementById('buscarCliente').value);
+    abrirChatWhatsApp(numero, texto.value, b.dataset.app);
+  });
 }
 
 function abrirModalCliente(cliente = null) {
@@ -1427,8 +1634,24 @@ function abrirModalCliente(cliente = null) {
   document.getElementById('campoCelularCliente').value = cliente?.celular || '';
   document.getElementById('campoNotasCliente').value = cliente?.notas || '';
   document.getElementById('filaEliminarCliente').style.display = cliente ? 'flex' : 'none';
+  // Tipo, intereses y plantas que busca
+  const selTipo = document.getElementById('campoTipoCliente');
+  selTipo.innerHTML = Clientes.TIPOS_CLIENTE.map((t) => `<option value="${t.id}">${t.emoji ? t.emoji + ' ' : ''}${escaparHtml(t.texto)}</option>`).join('');
+  selTipo.value = cliente?.tipo || 'normal';
+  const opciones = Inventario.CATEGORIAS_INFO.filter((c) => c.grupo === 'planta').map((c) => ({ v: c.nombre, t: `${c.emoji} ${c.nombre}` }))
+    .concat(Clientes.INTERESES_EXTRA.map((x) => ({ v: x, t: `✨ ${x}` })));
+  const marcados = new Set(cliente?.intereses || []);
+  document.getElementById('campoInteresesCliente').innerHTML = opciones.map((o) =>
+    `<label><input type="checkbox" value="${escaparHtml(o.v)}"${marcados.has(o.v) ? ' checked' : ''}> ${escaparHtml(o.t)}</label>`).join('');
+  document.getElementById('campoDeseosCliente').value = (cliente?.deseos || []).join('\n');
+  mostrarBloqueColeccionista();
   mostrarModal('modalCliente');
 }
+
+function mostrarBloqueColeccionista() {
+  document.getElementById('bloqueColeccionista').hidden = document.getElementById('campoTipoCliente').value === 'normal';
+}
+document.getElementById('campoTipoCliente').addEventListener('change', mostrarBloqueColeccionista);
 
 document.getElementById('btnCancelarCliente').addEventListener('click', () => ocultarModal('modalCliente'));
 
@@ -1450,6 +1673,9 @@ document.getElementById('btnGuardarCliente').addEventListener('click', async () 
     nombre,
     celular: document.getElementById('campoCelularCliente').value,
     notas: document.getElementById('campoNotasCliente').value,
+    tipo: document.getElementById('campoTipoCliente').value,
+    intereses: [...document.querySelectorAll('#campoInteresesCliente input:checked')].map((i) => i.value),
+    deseos: document.getElementById('campoDeseosCliente').value,
   });
 
   ocultarModal('modalCliente');
