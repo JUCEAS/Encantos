@@ -391,3 +391,19 @@ nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .avisos-coleccion .botones-wa { display: flex; flex-direction: column; gap: 4px; }
 .avisos-coleccion .btn.chico { width: auto; white-space: nowrap; }
 .avisos-coleccion .sin-numero { color: var(--rojo) !important; }
+
+/* ---------- Plantas que busca el cliente ---------- */
+.deseos-cliente { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.deseos-cliente:empty { display: none; }
+.deseo-chip { display: inline-flex; align-items: center; gap: 4px; background: #e6efe2; border: 1px solid var(--verde-claro); border-radius: 999px; padding: 4px 4px 4px 10px; font-size: 13px; color: #2d4a2a; }
+.deseo-chip button { border: 0; background: transparent; font-size: 15px; line-height: 1; padding: 2px 6px; cursor: pointer; color: #6b3a3a; }
+.fila-deseo { display: flex; gap: 6px; align-items: center; }
+.fila-deseo input { flex: 1; margin: 0; }
+.fila-deseo .btn.chico { width: auto; white-space: nowrap; margin: 0; }
+.sugerencias-deseo { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.sugerencias-deseo:empty { display: none; }
+.sugerencias-deseo button { text-align: left; border: 1px solid var(--borde); background: #fff; border-radius: 8px; padding: 8px 10px; font-size: 14px; font-family: inherit; cursor: pointer; color: #333; }
+.sugerencias-deseo button small { color: #888; }
+.intereses-cliente { margin: 8px 0; border: 1px dashed var(--borde); border-radius: 10px; padding: 8px 10px; }
+.intereses-cliente summary { cursor: pointer; font-size: 14px; color: #4b6b46; }
+.intereses-cliente[open] summary { margin-bottom: 8px; }
