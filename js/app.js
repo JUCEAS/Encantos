@@ -377,6 +377,7 @@ async function abrirModalProducto(producto = null) {
 
   document.getElementById('filaEliminarProducto').style.display = producto ? 'flex' : 'none';
   actualizarFormularioSegunCategoria();
+  actualizarBotonIdentificar();
 
   mostrarModal('modalProducto');
 }
@@ -416,6 +417,7 @@ async function manejarSeleccionFotoProducto(e) {
   preview.src = comprimida;
   preview.style.display = 'block';
   actualizarAvisoCatalogo();
+  actualizarBotonIdentificar();
 
   // Generar la huella visual en segundo plano para habilitar la búsqueda por foto
   try {
@@ -428,6 +430,192 @@ async function manejarSeleccionFotoProducto(e) {
     console.warn('No se pudo generar huella visual', err);
   }
 }
+
+// ---------- Identificar la planta con la foto (Pl@ntNet) ----------
+// La clave se guarda en ajustes/identificacion (solo la ve el equipo). En
+// my.plantnet.org la clave queda autorizada únicamente para juceas.github.io.
+const PLANTNET_URL = 'https://my-api.plantnet.org/v2/identify/all';
+const AJUSTE_IDENTIFICACION = 'identificacion';
+let clavePlantnet = null;
+
+// Familia o género -> categoría de Encantos (sugerencia; se puede cambiar)
+const CATEGORIA_POR_FAMILIA = {
+  Orchidaceae: 'Orquídeas', Cactaceae: 'Cactus', Bromeliaceae: 'Bromelias', Arecaceae: 'Palmas',
+  Crassulaceae: 'Suculentas', Aizoaceae: 'Suculentas', Polypodiaceae: 'Helechos', Pteridaceae: 'Helechos',
+  Nephrolepidaceae: 'Helechos', Aspleniaceae: 'Helechos', Dryopteridaceae: 'Helechos', Davalliaceae: 'Helechos',
+  Athyriaceae: 'Helechos', Blechnaceae: 'Helechos', Cyatheaceae: 'Helechos', Selaginellaceae: 'Helechos',
+  Araceae: 'Interior / follaje', Marantaceae: 'Interior / follaje', Piperaceae: 'Interior / follaje',
+  Urticaceae: 'Interior / follaje', Begoniaceae: 'Interior / follaje', Lamiaceae: 'Aromáticas, medicinales y comestibles',
+  Nymphaeaceae: 'Acuáticas', Pontederiaceae: 'Acuáticas', Poaceae: 'Cubresuelos y grama',
+};
+const CATEGORIA_POR_GENERO = {
+  Aloe: 'Suculentas', Haworthia: 'Suculentas', Gasteria: 'Suculentas', Haworthiopsis: 'Suculentas',
+  Sansevieria: 'Interior / follaje', Dracaena: 'Interior / follaje', Zamioculcas: 'Interior / follaje',
+  Chlorophytum: 'Interior / follaje', Aspidistra: 'Interior / follaje', Calathea: 'Interior / follaje',
+  Euphorbia: 'Suculentas', Portulaca: 'Suculentas', Adenium: 'Suculentas', Hoya: 'Enredaderas, trepadoras y colgantes',
+  Epipremnum: 'Enredaderas, trepadoras y colgantes', Tradescantia: 'Enredaderas, trepadoras y colgantes',
+  Bougainvillea: 'Enredaderas, trepadoras y colgantes', Ficus: 'Interior / follaje', Rosa: 'Con flor / de temporada',
+  Hibiscus: 'Arbustos ornamentales', Ixora: 'Arbustos ornamentales', Codiaeum: 'Arbustos ornamentales',
+  Anthurium: 'Interior / follaje', Spathiphyllum: 'Interior / follaje', Tillandsia: 'Bromelias',
+  Ocimum: 'Aromáticas, medicinales y comestibles', Mentha: 'Aromáticas, medicinales y comestibles',
+};
+
+function categoriaSugerida(familia, genero) {
+  const c = CATEGORIA_POR_GENERO[genero] || CATEGORIA_POR_FAMILIA[familia] || '';
+  return Inventario.CATEGORIAS.includes(c) ? c : '';
+}
+
+function actualizarBotonIdentificar() {
+  const cat = Inventario.infoCategoria(document.getElementById('campoCategoria').value);
+  document.getElementById('btnIdentificarPlanta').style.display = fotoTemporalDataUrl && cat.grupo === 'planta' ? 'block' : 'none';
+}
+
+async function obtenerClavePlantnet() {
+  if (clavePlantnet) return clavePlantnet;
+  const doc = await DB.obtener(DB.STORES.ajustes, AJUSTE_IDENTIFICACION).catch(() => null);
+  clavePlantnet = (doc && doc.plantnetKey) || '';
+  return clavePlantnet;
+}
+
+// Pide la clave la primera vez (o para cambiarla). Devuelve la clave o ''.
+function pedirClavePlantnet(mensajeError = '') {
+  return new Promise((resolve) => {
+    const velo = document.createElement('div');
+    velo.className = 'modal-overlay activo menu-acciones identificar';
+    velo.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h2>🔑 Clave de Pl@ntNet</h2>
+        ${mensajeError ? `<p class="m-error">${escaparHtml(mensajeError)}</p>` : ''}
+        <p class="mensaje-accion">Se configura una sola vez y sirve para todo el equipo.</p>
+        <ol>
+          <li>Entra a my.plantnet.org con tu cuenta.</li>
+          <li>En tu cuenta, activa <b>"Expose my API key"</b> y en <b>"Authorized domains"</b> escribe <b>juceas.github.io</b>.</li>
+          <li>Copia la <b>API key</b> y pégala aquí.</li>
+        </ol>
+        <input type="text" class="id-clave" placeholder="Pega aquí la API key" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <p class="m-error id-err"></p>
+        <button class="btn" data-guardar="1">Guardar clave</button>
+        <button class="btn btn-cancelar" data-cerrar="1">Cancelar</button>
+      </div>`;
+    document.body.appendChild(velo);
+    const campo = velo.querySelector('.id-clave');
+    campo.value = clavePlantnet || '';
+    velo.addEventListener('click', async (e) => {
+      if (e.target === velo || e.target.closest('[data-cerrar]')) { velo.remove(); resolve(''); return; }
+      if (!e.target.closest('[data-guardar]')) return;
+      const clave = campo.value.trim();
+      if (!/^[A-Za-z0-9_-]{10,}$/.test(clave)) { velo.querySelector('.id-err').textContent = 'Esa clave no parece completa. Cópiala de nuevo.'; return; }
+      try {
+        await DB.actualizar(DB.STORES.ajustes, { id: AJUSTE_IDENTIFICACION, plantnetKey: clave, actualizadoEl: new Date().toISOString() });
+      } catch (err) { velo.querySelector('.id-err').textContent = DB.mensajeDeError ? DB.mensajeDeError(err) : err.message; return; }
+      clavePlantnet = clave;
+      velo.remove();
+      resolve(clave);
+    });
+  });
+}
+
+async function consultarPlantnet(dataUrl, clave) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const form = new FormData();
+  form.append('images', blob, 'planta.jpg');
+  form.append('organs', 'auto');
+  const url = `${PLANTNET_URL}?api-key=${encodeURIComponent(clave)}&lang=es&nb-results=5&include-related-images=false`;
+  let r;
+  try {
+    r = await fetch(url, { method: 'POST', body: form });
+  } catch (e) {
+    throw Object.assign(new Error('No hay conexión a internet (o Pl@ntNet no respondió). Para identificar se necesita internet.'), { tipo: 'red' });
+  }
+  if (r.status === 404) return { results: [] };
+  if (r.status === 401 || r.status === 403) throw Object.assign(new Error('Pl@ntNet rechazó la clave. Revisa que esté bien copiada y que juceas.github.io esté en "Authorized domains".'), { tipo: 'clave' });
+  if (r.status === 429) throw new Error('Se alcanzó el límite de identificaciones gratis de hoy (500). Vuelve a intentar mañana.');
+  if (!r.ok) throw new Error(`Pl@ntNet respondió con un error (${r.status}). Intenta de nuevo en un momento.`);
+  return r.json();
+}
+
+function capitalizar(t) { t = String(t || '').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
+
+async function identificarPlantaConFoto() {
+  if (!fotoTemporalDataUrl) return;
+  let clave = await obtenerClavePlantnet();
+  if (!clave) clave = await pedirClavePlantnet();
+  if (!clave) return;
+
+  const velo = document.createElement('div');
+  velo.className = 'modal-overlay activo menu-acciones identificar';
+  velo.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2>🔎 ¿Qué planta es?</h2>
+      <img class="id-foto" alt="Foto de la planta">
+      <div class="id-lista"><div class="cargando">Consultando a Pl@ntNet...</div></div>
+      <p class="id-nota">Identificación por Pl@ntNet. Reconoce la especie, no la variedad comercial: revisa el nombre antes de guardar.</p>
+      <button class="btn btn-cancelar" data-cerrar="1">Cerrar</button>
+    </div>`;
+  velo.querySelector('.id-foto').src = fotoTemporalDataUrl;
+  document.body.appendChild(velo);
+  const lista = velo.querySelector('.id-lista');
+  let resultados = [];
+  velo.addEventListener('click', async (e) => {
+    if (e.target === velo || e.target.closest('[data-cerrar]')) { velo.remove(); return; }
+    if (e.target.closest('[data-cambiar-clave]')) {
+      velo.remove();
+      if (await pedirClavePlantnet()) identificarPlantaConFoto();
+      return;
+    }
+    const b = e.target.closest('[data-i]');
+    if (!b) return;
+    aplicarIdentificacion(resultados[Number(b.dataset.i)]);
+    velo.remove();
+  });
+
+  try {
+    const datos = await consultarPlantnet(fotoTemporalDataUrl, clave);
+    resultados = (datos.results || []).filter((x) => x.score >= 0.03).slice(0, 5).map((x) => ({
+      score: x.score,
+      cientifico: x.species?.scientificNameWithoutAuthor || '',
+      comunes: (x.species?.commonNames || []).slice(0, 4),
+      genero: x.species?.genus?.scientificNameWithoutAuthor || '',
+      familia: x.species?.family?.scientificNameWithoutAuthor || '',
+    }));
+    if (!resultados.length) {
+      lista.innerHTML = '<div class="vacio">No se pudo reconocer la planta. Prueba con una foto de cerca, con buena luz, donde se vea bien una hoja o la flor.</div>';
+      return;
+    }
+    lista.innerHTML = resultados.map((x, i) => {
+      const pct = Math.round(x.score * 100);
+      return `<button type="button" class="id-op" data-i="${i}">
+        <span class="id-pct${pct < 30 ? ' baja' : ''}">${pct}%</span>
+        <b>${escaparHtml(x.cientifico)}</b>
+        ${x.comunes.length ? `<small>🌿 ${escaparHtml(x.comunes.join(', '))}</small>` : ''}
+        <small>Familia ${escaparHtml(x.familia)}${categoriaSugerida(x.familia, x.genero) ? ` · ${escaparHtml(categoriaSugerida(x.familia, x.genero))}` : ''}</small>
+      </button>`;
+    }).join('') + (typeof datos.remainingIdentificationRequests === 'number'
+      ? `<p class="id-nota">Toca la correcta para llenar el formulario. Quedan ${datos.remainingIdentificationRequests} identificaciones gratis hoy.</p>` : '');
+  } catch (err) {
+    lista.innerHTML = `<p class="m-error">${escaparHtml(err.message)}</p>` +
+      (err.tipo === 'clave' ? '<button type="button" class="btn secundario" data-cambiar-clave="1">🔑 Cambiar la clave</button>' : '');
+  }
+}
+
+// Llena el formulario con la planta elegida (sin borrar lo que ya escribiste)
+function aplicarIdentificacion(x) {
+  if (!x) return;
+  document.getElementById('campoNombreCientifico').value = x.cientifico;
+  const nombre = document.getElementById('campoNombre');
+  if (!nombre.value.trim()) nombre.value = capitalizar(x.comunes[0] || x.genero || x.cientifico);
+  const cat = categoriaSugerida(x.familia, x.genero);
+  if (cat && !productoEditandoId) {
+    document.getElementById('campoCategoria').value = cat;
+    actualizarFormularioSegunCategoria();
+  }
+  const desc = document.getElementById('campoDescripcion');
+  if (!desc.value.trim() && x.comunes.length > 1) desc.value = `También conocida como ${x.comunes.slice(1).map(capitalizar).join(', ')}.`;
+  actualizarAvisoCatalogo();
+}
+
+document.getElementById('btnIdentificarPlanta').addEventListener('click', identificarPlantaConFoto);
+document.getElementById('campoCategoria').addEventListener('change', actualizarBotonIdentificar);
 
 document.getElementById('inputCamaraProducto').addEventListener('change', manejarSeleccionFotoProducto);
 document.getElementById('inputGaleriaProducto').addEventListener('change', manejarSeleccionFotoProducto);
