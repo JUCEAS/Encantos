@@ -1396,6 +1396,7 @@ async function mostrarOpcionesCompra(id) {
 // =========================================================
 
 let filtroTipoCliente = ''; // '' = todos
+let filtroLugarCliente = ''; // '' = todos, '~sin' = sin ubicación, o la clave del municipio
 
 async function refrescarClientes(filtro = '') {
   const contenedor = document.getElementById('listaClientes');
@@ -1412,11 +1413,25 @@ async function refrescarClientes(filtro = '') {
     refrescarClientes(document.getElementById('buscarCliente').value);
   }));
 
+  // Filtro por municipio, con cuántos clientes hay en cada lugar
+  const lugares = new Map();
+  todos.forEach((c) => { const k = Clientes.claveLugar(c); if (k) lugares.set(k, (lugares.get(k) || 0) + 1); });
+  const sinLugar = todos.filter((c) => !Clientes.claveLugar(c)).length;
+  if (filtroLugarCliente && filtroLugarCliente !== '~sin' && !lugares.has(filtroLugarCliente)) filtroLugarCliente = '';
+  document.getElementById('filtroLugarCliente').innerHTML = '<option value="">📍 Todos los lugares</option>' +
+    [...lugares.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([k, n]) => `<option value="${escaparHtml(k)}">${escaparHtml(k)} · ${n}</option>`).join('') +
+    (sinLugar ? `<option value="~sin">⚠️ Sin ubicación · ${sinLugar}</option>` : '');
+  document.getElementById('filtroLugarCliente').value = filtroLugarCliente;
+
   const q = filtro.trim().toLowerCase();
   let clientes = q
     ? todos.filter((c) => (c.nombre || '').toLowerCase().includes(q) || (c.celular || '').includes(q) ||
+        Clientes.ubicacionTexto(c).toLowerCase().includes(q) ||
         (c.deseos || []).some((d) => d.toLowerCase().includes(q)) || (c.intereses || []).some((d) => d.toLowerCase().includes(q)))
     : todos;
+  if (filtroLugarCliente === '~sin') clientes = clientes.filter((c) => !Clientes.claveLugar(c));
+  else if (filtroLugarCliente) clientes = clientes.filter((c) => Clientes.claveLugar(c) === filtroLugarCliente);
   if (filtroTipoCliente === 'busca') clientes = clientes.filter((c) => (c.deseos || []).length);
   else if (filtroTipoCliente) clientes = clientes.filter((c) => (c.tipo || 'normal') === filtroTipoCliente);
 
@@ -1435,6 +1450,7 @@ async function refrescarClientes(filtro = '') {
       <div class="info">
         <h3>${escaparHtml(c.nombre)}${especial ? ` <span class="chip tipo-${tipo.id}">${tipo.emoji} ${escaparHtml(tipo.texto.split(' (')[0])}</span>` : ''}</h3>
         <p>${escaparHtml(c.celular || 'Sin celular')}</p>
+        ${Clientes.ubicacionTexto(c) ? `<p class="lugar-cliente">📍 ${escaparHtml(Clientes.ubicacionTexto(c))}</p>` : '<p class="lugar-cliente sin">📍 Sin ubicación</p>'}
         ${(c.intereses || []).length ? `<p class="interes-cliente">Le interesa: ${escaparHtml(c.intereses.join(', '))}</p>` : ''}
         ${(c.deseos || []).length ? `<p class="interes-cliente">🔎 Busca: ${escaparHtml(c.deseos.join(', '))}</p>` : ''}
         ${c.creadoEl ? `<p style="font-size:12px;color:#888;">Cliente desde: ${new Date(c.creadoEl).toLocaleDateString()}</p>` : ''}
@@ -1449,6 +1465,54 @@ async function refrescarClientes(filtro = '') {
 }
 
 document.getElementById('buscarCliente').addEventListener('input', (e) => refrescarClientes(e.target.value));
+document.getElementById('filtroLugarCliente').addEventListener('change', (e) => {
+  filtroLugarCliente = e.target.value;
+  refrescarClientes(document.getElementById('buscarCliente').value);
+});
+document.getElementById('btnResumenLugares').addEventListener('click', () => abrirResumenLugares());
+
+// ---------- Resumen de clientes y ventas por municipio ----------
+function rangoPeriodo(id) {
+  const hoy = new Date();
+  const f = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  if (id === 'mes') return { desde: f(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: f(hoy) };
+  if (id === 'anterior') return { desde: f(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)), hasta: f(new Date(hoy.getFullYear(), hoy.getMonth(), 0)) };
+  if (id === 'anio') return { desde: f(new Date(hoy.getFullYear(), 0, 1)), hasta: f(hoy) };
+  return {};
+}
+
+async function abrirResumenLugares() {
+  const velo = document.createElement('div');
+  velo.className = 'modal-overlay activo menu-acciones resumen-lugares';
+  velo.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2>📊 Clientes por municipio</h2>
+      <select class="r-periodo" aria-label="Período de las ventas">
+        <option value="todo">Ventas de todo el tiempo</option>
+        <option value="mes">Ventas de este mes</option>
+        <option value="anterior">Ventas del mes anterior</option>
+        <option value="anio">Ventas de este año</option>
+      </select>
+      <div class="r-lista"><div class="cargando">Calculando...</div></div>
+      <button class="btn btn-cancelar" data-cerrar="1">Cerrar</button>
+    </div>`;
+  document.body.appendChild(velo);
+  const pintar = async () => {
+    const lista = velo.querySelector('.r-lista');
+    const filas = await Clientes.resumenPorMunicipio(rangoPeriodo(velo.querySelector('.r-periodo').value));
+    const max = Math.max(1, ...filas.map((g) => g.total));
+    lista.innerHTML = filas.length ? filas.map((g) => `
+      <div class="r-fila${g.clave.startsWith('~') ? ' gris' : ''}">
+        <b>${g.clave.startsWith('~') ? '⚠️' : '📍'} ${escaparHtml(g.nombre)}</b>
+        <small>${g.clave === '~general' ? '' : `👥 ${g.clientes} cliente${g.clientes === 1 ? '' : 's'} · `}🧾 ${g.ventas} venta${g.ventas === 1 ? '' : 's'} · ${formatoL(g.total)}</small>
+        ${g.plantaTop ? `<small>🌿 Lo que más compran: ${escaparHtml(g.plantaTop)} (${g.plantaTopCant})</small>` : ''}
+        <div class="r-barra" style="width:${Math.max(2, Math.round((g.total / max) * 100))}%"></div>
+      </div>`).join('') : '<div class="vacio">Aún no hay clientes.</div>';
+  };
+  velo.querySelector('.r-periodo').addEventListener('change', pintar);
+  velo.addEventListener('click', (e) => { if (e.target === velo || e.target.closest('[data-cerrar]')) velo.remove(); });
+  pintar();
+}
 
 async function mostrarOpcionesCliente(id) {
   const clientes = await Clientes.listarClientes();
@@ -1645,6 +1709,16 @@ function abrirModalCliente(cliente = null) {
   const marcados = new Set(cliente?.intereses || []);
   document.getElementById('campoInteresesCliente').innerHTML = opciones.map((o) =>
     `<label><input type="checkbox" value="${escaparHtml(o.v)}"${marcados.has(o.v) ? ' checked' : ''}> ${escaparHtml(o.t)}</label>`).join('');
+  // Ubicación: un cliente nuevo arranca con el último lugar usado
+  let ultimo = {};
+  try { ultimo = JSON.parse(localStorage.getItem('encantos-ultima-ubicacion') || '{}') || {}; } catch (e) { ultimo = {}; }
+  const dep = cliente ? (cliente.departamento || '') : (ultimo.departamento || '');
+  const selDep = document.getElementById('campoDepartamentoCliente');
+  selDep.innerHTML = '<option value="">Departamento...</option>' +
+    Object.keys(Clientes.DEPARTAMENTOS_HN).map((d) => `<option>${escaparHtml(d)}</option>`).join('');
+  selDep.value = dep;
+  llenarMunicipios(cliente ? (cliente.municipio || '') : (ultimo.municipio || ''));
+  document.getElementById('campoLocalidadCliente').value = cliente?.localidad || '';
   deseosEditando = [...(cliente?.deseos || [])];
   document.getElementById('campoDeseoNuevo').value = '';
   document.getElementById('sugerenciasDeseo').innerHTML = '';
@@ -1656,6 +1730,32 @@ function abrirModalCliente(cliente = null) {
   }).catch(() => { nombresInventario = []; });
   mostrarModal('modalCliente');
 }
+
+function llenarMunicipios(elegido = '') {
+  const dep = document.getElementById('campoDepartamentoCliente').value;
+  const sel = document.getElementById('campoMunicipioCliente');
+  const lista = Clientes.municipiosDe(dep);
+  sel.innerHTML = `<option value="">${dep ? 'Municipio...' : '← Elige departamento'}</option>` +
+    lista.map((m) => `<option>${escaparHtml(m)}</option>`).join('');
+  sel.disabled = !dep;
+  sel.value = lista.includes(elegido) ? elegido : '';
+  sugerirLocalidades();
+}
+
+// Sugerencias de ciudad/aldea/colonia: las que ya se usaron en ese municipio
+async function sugerirLocalidades() {
+  const mun = document.getElementById('campoMunicipioCliente').value;
+  const dep = document.getElementById('campoDepartamentoCliente').value;
+  const clientes = await Clientes.listarClientes().catch(() => []);
+  const vistas = new Map();
+  clientes.filter((c) => c.localidad && (!mun || (c.municipio === mun && c.departamento === dep)))
+    .forEach((c) => { const k = normalizarBusqueda(c.localidad); if (!vistas.has(k)) vistas.set(k, c.localidad); });
+  document.getElementById('listaLocalidades').innerHTML = [...vistas.values()].sort((a, b) => a.localeCompare(b))
+    .map((l) => `<option value="${escaparHtml(l)}"></option>`).join('');
+}
+
+document.getElementById('campoDepartamentoCliente').addEventListener('change', () => llenarMunicipios());
+document.getElementById('campoMunicipioCliente').addEventListener('change', sugerirLocalidades);
 
 // ---------- Plantas que anda buscando el cliente (etiquetas con sugerencias) ----------
 let deseosEditando = [];
@@ -1726,8 +1826,16 @@ document.getElementById('btnGuardarCliente').addEventListener('click', async () 
   const nombre = document.getElementById('campoNombreCliente').value.trim();
   if (!nombre) { alert('Ingresa el nombre del cliente.'); return; }
 
+  const departamento = document.getElementById('campoDepartamentoCliente').value;
+  const municipio = document.getElementById('campoMunicipioCliente').value;
+  if (departamento && !municipio) { alert('Elige también el municipio del cliente (o deja el departamento en blanco).'); return; }
+  try { if (municipio) localStorage.setItem('encantos-ultima-ubicacion', JSON.stringify({ departamento, municipio })); } catch (e) { /* sin almacenamiento */ }
+
   await Clientes.guardarCliente({
     id: clienteEditandoId,
+    departamento,
+    municipio,
+    localidad: document.getElementById('campoLocalidadCliente').value,
     creadoEl: clienteEditandoCreadoEl,
     nombre,
     celular: document.getElementById('campoCelularCliente').value,
