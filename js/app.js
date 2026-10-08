@@ -259,7 +259,7 @@ async function mostrarOpcionesProducto(id) {
   ]);
   if (accion === 'interesados') {
     const hay = await avisarInteresados([producto], `💎 Interesados en ${producto.nombre}`);
-    if (!hay) alert('Ningún coleccionista o mayorista tiene esta planta o su categoría en su lista. Puedes agregarla en la ficha del cliente.');
+    if (!hay) alert('Ningún cliente tiene esta planta (o su categoría) en su lista de plantas que anda buscando. Puedes agregarla en la ficha del cliente.');
     return;
   }
   if (accion === 'vender') abrirModalVenta(producto);
@@ -1403,7 +1403,8 @@ async function refrescarClientes(filtro = '') {
   // Filtros rápidos por tipo, con cuántos hay de cada uno
   const cuenta = (t) => todos.filter((c) => (c.tipo || 'normal') === t).length;
   const botones = [{ id: '', t: `Todos (${todos.length})` }]
-    .concat(Clientes.TIPOS_CLIENTE.filter((t) => t.id !== 'normal').map((t) => ({ id: t.id, t: `${t.emoji} ${t.texto.split(' (')[0]}s (${cuenta(t.id)})` })));
+    .concat(Clientes.TIPOS_CLIENTE.filter((t) => t.id !== 'normal').map((t) => ({ id: t.id, t: `${t.emoji} ${t.texto.split(' (')[0]}s (${cuenta(t.id)})` })))
+    .concat([{ id: 'busca', t: `🔎 Buscan algo (${todos.filter((c) => (c.deseos || []).length).length})` }]);
   document.getElementById('filtroTiposCliente').innerHTML = botones.map((b) =>
     `<button type="button" class="chip-filtro${filtroTipoCliente === b.id ? ' activo' : ''}" data-tipo="${b.id}">${escaparHtml(b.t)}</button>`).join('');
   document.querySelectorAll('#filtroTiposCliente [data-tipo]').forEach((b) => b.addEventListener('click', () => {
@@ -1416,7 +1417,8 @@ async function refrescarClientes(filtro = '') {
     ? todos.filter((c) => (c.nombre || '').toLowerCase().includes(q) || (c.celular || '').includes(q) ||
         (c.deseos || []).some((d) => d.toLowerCase().includes(q)) || (c.intereses || []).some((d) => d.toLowerCase().includes(q)))
     : todos;
-  if (filtroTipoCliente) clientes = clientes.filter((c) => (c.tipo || 'normal') === filtroTipoCliente);
+  if (filtroTipoCliente === 'busca') clientes = clientes.filter((c) => (c.deseos || []).length);
+  else if (filtroTipoCliente) clientes = clientes.filter((c) => (c.tipo || 'normal') === filtroTipoCliente);
 
   if (clientes.length === 0) {
     contenedor.innerHTML = todos.length
@@ -1433,8 +1435,8 @@ async function refrescarClientes(filtro = '') {
       <div class="info">
         <h3>${escaparHtml(c.nombre)}${especial ? ` <span class="chip tipo-${tipo.id}">${tipo.emoji} ${escaparHtml(tipo.texto.split(' (')[0])}</span>` : ''}</h3>
         <p>${escaparHtml(c.celular || 'Sin celular')}</p>
-        ${especial && (c.intereses || []).length ? `<p class="interes-cliente">Le interesa: ${escaparHtml(c.intereses.join(', '))}</p>` : ''}
-        ${especial && (c.deseos || []).length ? `<p class="interes-cliente">🔎 Busca: ${escaparHtml(c.deseos.join(', '))}</p>` : ''}
+        ${(c.intereses || []).length ? `<p class="interes-cliente">Le interesa: ${escaparHtml(c.intereses.join(', '))}</p>` : ''}
+        ${(c.deseos || []).length ? `<p class="interes-cliente">🔎 Busca: ${escaparHtml(c.deseos.join(', '))}</p>` : ''}
         ${c.creadoEl ? `<p style="font-size:12px;color:#888;">Cliente desde: ${new Date(c.creadoEl).toLocaleDateString()}</p>` : ''}
         ${c.ultimoCatalogo ? `<p class="ultimo-catalogo">${escaparHtml(textoUltimoCatalogo(c))}</p>` : ''}
       </div>
@@ -1470,7 +1472,7 @@ function textoUltimoCatalogo(c) {
 }
 
 // ---------- Avisar a coleccionistas cuando llega una planta que buscan ----------
-async function avisarInteresados(productosNuevos, titulo = '💎 Coleccionistas interesados') {
+async function avisarInteresados(productosNuevos, titulo = '🔎 Clientes que buscan estas plantas') {
   const clientes = await Clientes.listarClientes();
   const interesados = Clientes.interesadosEn(productosNuevos, clientes);
   if (!interesados.length) return false;
@@ -1643,15 +1645,72 @@ function abrirModalCliente(cliente = null) {
   const marcados = new Set(cliente?.intereses || []);
   document.getElementById('campoInteresesCliente').innerHTML = opciones.map((o) =>
     `<label><input type="checkbox" value="${escaparHtml(o.v)}"${marcados.has(o.v) ? ' checked' : ''}> ${escaparHtml(o.t)}</label>`).join('');
-  document.getElementById('campoDeseosCliente').value = (cliente?.deseos || []).join('\n');
-  mostrarBloqueColeccionista();
+  deseosEditando = [...(cliente?.deseos || [])];
+  document.getElementById('campoDeseoNuevo').value = '';
+  document.getElementById('sugerenciasDeseo').innerHTML = '';
+  pintarDeseos();
+  document.getElementById('bloqueIntereses').open = marcados.size > 0;
+  Inventario.listarProductos().then((ps) => {
+    nombresInventario = [...new Map(ps.filter((p) => Inventario.infoCategoria(p.categoria).grupo === 'planta')
+      .map((p) => [normalizarBusqueda(p.nombre), p])).values()];
+  }).catch(() => { nombresInventario = []; });
   mostrarModal('modalCliente');
 }
 
-function mostrarBloqueColeccionista() {
-  document.getElementById('bloqueColeccionista').hidden = document.getElementById('campoTipoCliente').value === 'normal';
+// ---------- Plantas que anda buscando el cliente (etiquetas con sugerencias) ----------
+let deseosEditando = [];
+let nombresInventario = [];
+
+function normalizarBusqueda(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
-document.getElementById('campoTipoCliente').addEventListener('change', mostrarBloqueColeccionista);
+
+function pintarDeseos() {
+  document.getElementById('listaDeseosCliente').innerHTML = deseosEditando.map((d, i) =>
+    `<span class="deseo-chip">🌿 ${escaparHtml(d)}<button type="button" data-quitar="${i}" aria-label="Quitar ${escaparHtml(d)}">✕</button></span>`).join('');
+}
+
+function agregarDeseo(texto) {
+  const d = String(texto || '').trim().replace(/\s+/g, ' ');
+  const campo = document.getElementById('campoDeseoNuevo');
+  campo.value = '';
+  document.getElementById('sugerenciasDeseo').innerHTML = '';
+  if (!d) return;
+  if (!deseosEditando.some((x) => normalizarBusqueda(x) === normalizarBusqueda(d))) deseosEditando.push(d);
+  pintarDeseos();
+  campo.focus();
+}
+
+function mostrarSugerenciasDeseo() {
+  const q = normalizarBusqueda(document.getElementById('campoDeseoNuevo').value);
+  const caja = document.getElementById('sugerenciasDeseo');
+  if (q.length < 2) { caja.innerHTML = ''; return; }
+  const ya = new Set(deseosEditando.map(normalizarBusqueda));
+  const lista = nombresInventario
+    .filter((p) => normalizarBusqueda(p.nombre).includes(q) && !ya.has(normalizarBusqueda(p.nombre)))
+    .slice(0, 6);
+  const exacto = lista.some((p) => normalizarBusqueda(p.nombre) === q);
+  const texto = document.getElementById('campoDeseoNuevo').value.trim();
+  caja.innerHTML = lista.map((p) =>
+    `<button type="button" data-deseo="${escaparHtml(p.nombre)}">🌿 ${escaparHtml(p.nombre)} <small>· ${Number(p.stock) > 0 ? `hay ${p.stock}` : 'agotada'}</small></button>`).join('') +
+    (exacto || ya.has(q) ? '' : `<button type="button" data-deseo="${escaparHtml(texto)}">➕ Agregar "${escaparHtml(texto)}"</button>`);
+}
+
+document.getElementById('campoDeseoNuevo').addEventListener('input', mostrarSugerenciasDeseo);
+document.getElementById('campoDeseoNuevo').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); agregarDeseo(e.target.value); }
+});
+document.getElementById('btnAgregarDeseo').addEventListener('click', () => agregarDeseo(document.getElementById('campoDeseoNuevo').value));
+document.getElementById('sugerenciasDeseo').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-deseo]');
+  if (b) agregarDeseo(b.dataset.deseo);
+});
+document.getElementById('listaDeseosCliente').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-quitar]');
+  if (!b) return;
+  deseosEditando.splice(Number(b.dataset.quitar), 1);
+  pintarDeseos();
+});
 
 document.getElementById('btnCancelarCliente').addEventListener('click', () => ocultarModal('modalCliente'));
 
@@ -1675,7 +1734,8 @@ document.getElementById('btnGuardarCliente').addEventListener('click', async () 
     notas: document.getElementById('campoNotasCliente').value,
     tipo: document.getElementById('campoTipoCliente').value,
     intereses: [...document.querySelectorAll('#campoInteresesCliente input:checked')].map((i) => i.value),
-    deseos: document.getElementById('campoDeseosCliente').value,
+    // Lo que quedó escrito sin tocar "Agregar" también se guarda
+    deseos: deseosEditando.concat(document.getElementById('campoDeseoNuevo').value.trim() || []),
   });
 
   ocultarModal('modalCliente');
