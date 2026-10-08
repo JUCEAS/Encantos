@@ -87,6 +87,35 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
     y += 5;
   });
 
+  // Ventas por municipio (de dónde son los clientes)
+  try {
+    const lugares = await Clientes.resumenPorMunicipio({ desde, hasta });
+    const conVentas = lugares.filter((g) => g.ventas > 0);
+    if (conVentas.length) {
+      y += 8;
+      if (y > 250) { doc.addPage(); y = 18; }
+      doc.setFontSize(12);
+      doc.text('Ventas por municipio', margenIzq, y);
+      y += 6;
+      doc.setFontSize(9);
+      doc.text('Lugar', margenIzq, y);
+      doc.text('Ventas', 95, y);
+      doc.text('Total', 112, y);
+      doc.text('Lo que mas compran', 140, y);
+      y += 4;
+      doc.line(margenIzq, y, 196, y);
+      y += 4;
+      conVentas.forEach((g) => {
+        if (y > 280) { doc.addPage(); y = 18; }
+        doc.text(g.nombre.substring(0, 44), margenIzq, y);
+        doc.text(String(g.ventas), 98, y);
+        doc.text(formatoLempiras(g.total), 112, y);
+        doc.text(g.plantaTop.substring(0, 28), 140, y);
+        y += 5;
+      });
+    }
+  } catch (e) { console.warn('No se pudo calcular ventas por municipio', e); }
+
   y += 8;
   if (y > 260) { doc.addPage(); y = 18; }
   doc.setFontSize(12);
@@ -283,21 +312,29 @@ async function construirPDFClientes() {
 
   doc.setFontSize(10);
   doc.text(`Total de clientes registrados: ${clientes.length}`, margenIzq, y);
-  y += 10;
+  y += 6;
+  // Cuántos clientes hay en cada municipio
+  const porLugar = {};
+  clientes.forEach((c) => { const k = Clientes.claveLugar(c) || 'Sin ubicacion'; porLugar[k] = (porLugar[k] || 0) + 1; });
+  const resumenLugares = Object.entries(porLugar).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}: ${n}`).join('  |  ');
+  doc.splitTextToSize('Por municipio: ' + resumenLugares, 182).forEach((linea) => { doc.text(linea, margenIzq, y); y += 5; });
+  y += 5;
 
   doc.setFontSize(9);
   doc.text('Nombre', margenIzq, y);
-  doc.text('Celular', 100, y);
-  doc.text('Cliente desde', 145, y);
+  doc.text('Celular', 78, y);
+  doc.text('De donde es', 106, y);
+  doc.text('Desde', 176, y);
   y += 4;
   doc.line(margenIzq, y, 196, y);
   y += 4;
 
   clientes.forEach((c) => {
     if (y > 280) { doc.addPage(); y = 18; }
-    doc.text((c.nombre || '').substring(0, 38), margenIzq, y);
-    doc.text(c.celular || '-', 100, y);
-    doc.text(c.creadoEl ? new Date(c.creadoEl).toLocaleDateString() : '-', 145, y);
+    doc.text((c.nombre || '').substring(0, 32), margenIzq, y);
+    doc.text(c.celular || '-', 78, y);
+    doc.text((Clientes.ubicacionTexto(c) || '-').substring(0, 42), 106, y);
+    doc.text(c.creadoEl ? new Date(c.creadoEl).toLocaleDateString() : '-', 176, y);
     y += 6;
     if (c.notas) {
       doc.setFontSize(8);
