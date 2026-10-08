@@ -407,3 +407,19 @@ nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .intereses-cliente { margin: 8px 0; border: 1px dashed var(--borde); border-radius: 10px; padding: 8px 10px; }
 .intereses-cliente summary { cursor: pointer; font-size: 14px; color: #4b6b46; }
 .intereses-cliente[open] summary { margin-bottom: 8px; }
+
+/* ---------- Ubicación del cliente ---------- */
+.fila-ubicacion { display: flex; gap: 6px; }
+.fila-ubicacion select { flex: 1; min-width: 0; }
+.fila-lugar { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; }
+.fila-lugar select { flex: 1; min-width: 0; margin: 0; }
+.fila-lugar .btn.chico { white-space: nowrap; margin: 0; }
+.lugar-cliente { font-size: 12px; color: #555; }
+.lugar-cliente.sin { color: #a0703a; }
+.resumen-lugares select { margin-bottom: 8px; }
+.resumen-lugares .r-lista { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; }
+.resumen-lugares .r-fila { border: 1px solid var(--borde); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+.resumen-lugares .r-fila b { display: block; }
+.resumen-lugares .r-fila small { color: #666; display: block; }
+.resumen-lugares .r-barra { height: 6px; background: var(--verde-claro); border-radius: 3px; margin-top: 6px; }
+.resumen-lugares .r-fila.gris { background: #f6f3ee; }
