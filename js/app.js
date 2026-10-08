@@ -528,7 +528,13 @@ async function consultarPlantnet(dataUrl, clave) {
     throw Object.assign(new Error('No hay conexión a internet (o Pl@ntNet no respondió). Para identificar se necesita internet.'), { tipo: 'red' });
   }
   if (r.status === 404) return { results: [] };
-  if (r.status === 401 || r.status === 403) throw Object.assign(new Error('Pl@ntNet rechazó la clave. Revisa que esté bien copiada y que juceas.github.io esté en "Authorized domains".'), { tipo: 'clave' });
+  if (r.status === 401 || r.status === 403) {
+    // Se muestra lo que respondió Pl@ntNet para saber si es la clave o el dominio
+    let detalle = '';
+    try { const j = await r.json(); detalle = j.message || j.error || ''; } catch (e) { /* sin detalle */ }
+    throw Object.assign(new Error(`Pl@ntNet rechazó la consulta (${r.status}${detalle ? ': ' + detalle : ''}). ` +
+      'Revisa que la clave esté completa, que "Expose my API key" esté activado y que en "Authorized domains" diga solo juceas.github.io (sin https:// ni /Encantos).'), { tipo: 'clave' });
+  }
   if (r.status === 429) throw new Error('Se alcanzó el límite de identificaciones gratis de hoy (500). Vuelve a intentar mañana.');
   if (!r.ok) throw new Error(`Pl@ntNet respondió con un error (${r.status}). Intenta de nuevo en un momento.`);
   return r.json();
