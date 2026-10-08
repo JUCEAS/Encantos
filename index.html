@@ -98,6 +98,10 @@
       <input type="text" id="buscarCliente" placeholder="Buscar cliente o planta que busca...">
     </div>
     <div class="filtro-tipos" id="filtroTiposCliente"></div>
+    <div class="fila-lugar">
+      <select id="filtroLugarCliente" aria-label="Filtrar por municipio"></select>
+      <button type="button" class="btn secundario chico" id="btnResumenLugares">📊 Por municipio</button>
+    </div>
     <div id="listaClientes"><div class="cargando">Cargando clientes...</div></div>
   </section>
 
@@ -427,6 +431,13 @@
     <input type="text" id="campoNombreCliente" placeholder="Nombre del cliente">
     <label>Celular</label>
     <input type="tel" id="campoCelularCliente" placeholder="9999-9999">
+    <label>📍 ¿De dónde es?</label>
+    <div class="fila-ubicacion">
+      <select id="campoDepartamentoCliente" aria-label="Departamento"></select>
+      <select id="campoMunicipioCliente" aria-label="Municipio"></select>
+    </div>
+    <input type="text" id="campoLocalidadCliente" list="listaLocalidades" placeholder="Ciudad, aldea o colonia (opcional)" autocomplete="off">
+    <datalist id="listaLocalidades"></datalist>
     <label>Tipo de cliente</label>
     <select id="campoTipoCliente"></select>
     <label>🔎 Plantas que anda buscando</label>
