@@ -429,13 +429,18 @@
     <input type="tel" id="campoCelularCliente" placeholder="9999-9999">
     <label>Tipo de cliente</label>
     <select id="campoTipoCliente"></select>
-    <div id="bloqueColeccionista" hidden>
-      <label>¿Qué le interesa? (marca las que apliquen)</label>
-      <div class="grupo-etiquetas" id="campoInteresesCliente"></div>
-      <label>Plantas que anda buscando (una por línea)</label>
-      <textarea id="campoDeseosCliente" rows="3" placeholder="Ej.:&#10;Monstera Thai Constellation&#10;Anthurium warocqueanum"></textarea>
-      <p class="nota-envio">💎 Cuando registren una compra con alguna de estas plantas o categorías, la app les avisará para ofrecérsela primero.</p>
+    <label>🔎 Plantas que anda buscando</label>
+    <div class="deseos-cliente" id="listaDeseosCliente"></div>
+    <div class="fila-deseo">
+      <input type="text" id="campoDeseoNuevo" placeholder="Escribe: aglaonema, monstera..." autocomplete="off" enterkeyhint="done">
+      <button type="button" class="btn chico" id="btnAgregarDeseo">Agregar</button>
     </div>
+    <div class="sugerencias-deseo" id="sugerenciasDeseo"></div>
+    <p class="nota-envio">Cuando registres una compra con alguna de estas plantas, la app te avisará para ofrecérsela primero.</p>
+    <details class="intereses-cliente" id="bloqueIntereses">
+      <summary>¿Le interesa toda una categoría? (opcional)</summary>
+      <div class="grupo-etiquetas" id="campoInteresesCliente"></div>
+    </details>
     <label>Notas (opcional)</label>
     <textarea id="campoNotasCliente"></textarea>
     <div class="fila-botones">
