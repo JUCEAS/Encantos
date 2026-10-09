@@ -215,20 +215,21 @@
       <button class="btn secundario" id="btnElegirGaleria">🖼️ Elegir de galería</button>
     </div>
     <button class="btn btn-identificar" id="btnIdentificarPlanta" type="button" style="display:none;">🔎 Identificar la planta con esta foto</button>
+    <p class="nota-identificacion" id="notaIdentificacion"></p>
 
     <label>Categoría</label>
     <select id="campoCategoria"></select>
 
     <label>Nombre</label>
-    <input type="text" id="campoNombre" placeholder="Ej: Lengua de suegra, Piedra pómez 1 kg...">
+    <input type="text" id="campoNombre">
 
     <label>Descripción</label>
-    <textarea id="campoDescripcion" placeholder="Lo que el cliente debe saber: cómo es, cuidados, para qué espacio es ideal..."></textarea>
+    <textarea id="campoDescripcion"></textarea>
 
     <!-- Datos de la planta: se ocultan cuando es un insumo -->
     <div id="camposPlanta">
       <label>Nombre científico (opcional)</label>
-      <input type="text" id="campoNombreCientifico" placeholder="Ej: Sansevieria trifasciata">
+      <input type="text" id="campoNombreCientifico">
 
       <div class="dos-columnas">
         <div>
@@ -506,6 +507,7 @@
 <script src="js/inventario.js"></script>
 <script src="js/catalogo.js"></script>
 <script src="js/busqueda-visual.js"></script>
+<script src="js/cuidados.js"></script>
 <script src="js/clientes.js"></script>
 <script src="js/proveedores.js"></script>
 <script src="js/ventas.js"></script>
