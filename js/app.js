@@ -378,6 +378,7 @@ async function abrirModalProducto(producto = null) {
   document.getElementById('filaEliminarProducto').style.display = producto ? 'flex' : 'none';
   actualizarFormularioSegunCategoria();
   actualizarBotonIdentificar();
+  document.getElementById('notaIdentificacion').textContent = '';
 
   mostrarModal('modalProducto');
 }
@@ -409,6 +410,7 @@ document.getElementById('btnElegirGaleria').addEventListener('click', () => {
 async function manejarSeleccionFotoProducto(e) {
   const archivo = e.target.files[0];
   if (!archivo) return;
+  e.target.value = ''; // así se puede volver a elegir la misma foto
   const dataUrl = await leerArchivoComoDataUrl(archivo);
   const comprimida = await Inventario.comprimirImagen(dataUrl);
   fotoTemporalDataUrl = comprimida;
@@ -604,8 +606,31 @@ async function identificarPlantaConFoto() {
   }
 }
 
+// Ficha de cuidados para un nombre científico. Primero se usa lo que ustedes
+// ya registraron (misma especie), luego la tabla de cuidados y, por último,
+// otra planta suya del mismo género.
+async function fichaParaPlanta(cientifico) {
+  const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const genero = norm(cientifico).split(' ')[0];
+  const productos = await Inventario.listarProductos().catch(() => []);
+  const conCuidados = productos.filter((p) => p.id !== productoEditandoId && p.nombreCientifico &&
+    (p.tipoSol || p.riego || p.ubicacion || p.dificultad || p.mascotas));
+  const desdeProducto = (p) => ({
+    origen: `tu producto "${p.nombre}"`,
+    tipoSol: p.tipoSol || '', riego: p.riego || '', ubicacion: p.ubicacion || '', dificultad: p.dificultad || '',
+    mascotas: p.mascotas || '', tamanoAdulto: p.tamanoAdulto || '',
+    etiquetas: (p.etiquetas || []).filter((e) => e === 'Para principiantes' || e === 'Poca luz'), consejo: '',
+  });
+  const misma = conCuidados.find((p) => norm(p.nombreCientifico) === norm(cientifico));
+  if (misma) return desdeProducto(misma);
+  const tabla = window.Cuidados ? Cuidados.fichaCuidados(cientifico) : null;
+  if (tabla) return { ...tabla, origen: `la ficha de ${tabla.clave}` };
+  const parecida = conCuidados.find((p) => norm(p.nombreCientifico).split(' ')[0] === genero);
+  return parecida ? desdeProducto(parecida) : null;
+}
+
 // Llena el formulario con la planta elegida (sin borrar lo que ya escribiste)
-function aplicarIdentificacion(x) {
+async function aplicarIdentificacion(x) {
   if (!x) return;
   document.getElementById('campoNombreCientifico').value = x.cientifico;
   const nombre = document.getElementById('campoNombre');
@@ -615,8 +640,41 @@ function aplicarIdentificacion(x) {
     document.getElementById('campoCategoria').value = cat;
     actualizarFormularioSegunCategoria();
   }
+
+  const ficha = await fichaParaPlanta(x.cientifico);
+  const llenados = [];
+  if (ficha) {
+    const campos = [
+      ['campoTipoSol', 'tipoSol', 'luz'], ['campoRiego', 'riego', 'riego'], ['campoUbicacion', 'ubicacion', 'ubicación'],
+      ['campoDificultad', 'dificultad', 'cuidado'], ['campoMascotas', 'mascotas', 'mascotas'],
+    ];
+    campos.forEach(([id, k, texto]) => {
+      const sel = document.getElementById(id);
+      if (!sel.value && ficha[k] && [...sel.options].some((o) => o.value === ficha[k])) { sel.value = ficha[k]; llenados.push(texto); }
+    });
+    const tam = document.getElementById('campoTamanoAdulto');
+    if (!tam.value.trim() && ficha.tamanoAdulto) { tam.value = ficha.tamanoAdulto; llenados.push('tamaño adulto'); }
+    (ficha.etiquetas || []).forEach((e) => {
+      const chk = [...document.querySelectorAll('#campoEtiquetas input')].find((i) => i.value === e);
+      if (chk && !chk.checked) { chk.checked = true; llenados.push(`"${e}"`); }
+    });
+  }
+
   const desc = document.getElementById('campoDescripcion');
-  if (!desc.value.trim() && x.comunes.length > 1) desc.value = `También conocida como ${x.comunes.slice(1).map(capitalizar).join(', ')}.`;
+  if (!desc.value.trim()) {
+    const partes = [];
+    if (x.comunes.length > 1) partes.push(`También conocida como ${x.comunes.slice(1).map(capitalizar).join(', ')}.`);
+    if (ficha && ficha.consejo) partes.push(ficha.consejo);
+    if (partes.length) { desc.value = partes.join(' '); llenados.push('descripción'); }
+  }
+
+  const nota = document.getElementById('notaIdentificacion');
+  nota.classList.toggle('sin-ficha', !ficha);
+  nota.textContent = ficha
+    ? (llenados.length
+      ? `✅ Con ${ficha.origen} se llenó: ${llenados.join(', ')}. Revisa antes de guardar.`
+      : `✅ Identificada. Los cuidados ya estaban llenos, no se cambió nada.`)
+    : `ℹ️ Identificada como ${x.cientifico}, pero aún no tengo su ficha de cuidados: llena luz y riego a mano. La próxima vez que identifiques una igual, la app usará lo que guardes ahora.`;
   actualizarAvisoCatalogo();
 }
 
