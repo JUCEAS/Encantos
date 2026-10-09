@@ -436,3 +436,7 @@ nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
 .identificar .id-nota { font-size: 12px; color: #777; margin: 6px 0 0; }
 .identificar input { margin-bottom: 4px; }
 .identificar ol { padding-left: 18px; font-size: 13px; color: #444; margin: 4px 0 8px; }
+.nota-identificacion { font-size: 13px; color: #2d4a2a; background: #e6efe2; border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; }
+.nota-identificacion:empty { display: none; }
+.nota-identificacion.sin-ficha { background: #f6f3ee; color: #6b4a2a; }
+#modalProducto textarea { font-family: inherit; }
