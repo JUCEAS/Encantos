@@ -20,6 +20,7 @@ const STORES = {
   proveedores: 'proveedores',
   catalogo: 'catalogo',
   pedidos: 'pedidos',
+  notas: 'notas',
 };
 
 // Documento único con los datos públicos del negocio (WhatsApp, cuenta bancaria...)
@@ -133,16 +134,17 @@ function escucharCambios(nombreTienda, callback) {
 
 // Exportar toda la base de datos como un objeto plano (para respaldo)
 async function exportarTodo() {
-  const [productos, clientes, ventas, proveedores, catalogo, pedidos] = await Promise.all([
+  const [productos, clientes, ventas, proveedores, catalogo, pedidos, notas] = await Promise.all([
     obtenerTodos(STORES.productos),
     obtenerTodos(STORES.clientes),
     obtenerTodos(STORES.ventas),
     obtenerTodos(STORES.proveedores),
     obtenerTodos(STORES.catalogo),
     obtenerTodos(STORES.pedidos),
+    obtenerTodos(STORES.notas),
   ]);
   return {
-    version: 4,
+    version: 5,
     exportadoEl: new Date().toISOString(),
     productos,
     clientes,
@@ -150,6 +152,7 @@ async function exportarTodo() {
     proveedores,
     catalogo,
     pedidos,
+    notas,
   };
 }
 
@@ -181,6 +184,7 @@ async function importarTodo(data) {
     limpiarColeccion(STORES.proveedores),
     limpiarColeccion(STORES.catalogo),
     limpiarColeccion(STORES.pedidos),
+    limpiarColeccion(STORES.notas),
   ]);
 
   const escrituras = [];
@@ -205,6 +209,7 @@ async function importarTodo(data) {
   (data.proveedores || []).forEach((pr) => agregarAlLote(STORES.proveedores, pr));
   (data.catalogo || []).forEach((c) => agregarAlLote(STORES.catalogo, c));
   (data.pedidos || []).forEach((pe) => agregarAlLote(STORES.pedidos, pe));
+  (data.notas || []).forEach((n) => agregarAlLote(STORES.notas, n));
 
   if (contador > 0) escrituras.push(batch.commit());
   await Promise.all(escrituras);

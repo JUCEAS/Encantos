@@ -17,8 +17,8 @@ let cacheCatalogoPedidos = [];
 // ---------- Navegación entre pestañas ----------
 // Las pestañas de abajo son 5; lo demás (catálogo, proveedores, reportes y
 // datos del negocio) cuelga de "Más".
-const VISTAS_DE_MAS = ['mas', 'catalogo', 'proveedores', 'reportes', 'configuracion'];
-const VISTAS_CON_BOTON_AGREGAR = ['inventario', 'clientes', 'proveedores', 'catalogo', 'pedidos'];
+const VISTAS_DE_MAS = ['mas', 'notas', 'catalogo', 'proveedores', 'reportes', 'configuracion'];
+const VISTAS_CON_BOTON_AGREGAR = ['inventario', 'clientes', 'proveedores', 'catalogo', 'pedidos', 'notas'];
 
 document.querySelectorAll('.tabbar .tab').forEach((btn) => {
   btn.addEventListener('click', () => cambiarVista(btn.dataset.vista));
@@ -44,6 +44,7 @@ function cambiarVista(nombre) {
   if (nombre === 'clientes') refrescarClientes();
   if (nombre === 'proveedores') refrescarProveedores();
   if (nombre === 'catalogo') refrescarCatalogo();
+  if (nombre === 'notas') refrescarNotas();
   if (nombre === 'configuracion') cargarConfiguracion();
 
   window.scrollTo(0, 0);
@@ -57,6 +58,7 @@ document.getElementById('btnAgregar').addEventListener('click', () => {
   if (vistaActiva === 'vista-proveedores') abrirModalProveedor();
   if (vistaActiva === 'vista-catalogo') abrirModalCatalogo();
   if (vistaActiva === 'vista-pedidos') abrirModalPedido();
+  if (vistaActiva === 'vista-notas') abrirModalNota();
 });
 
 function mostrarModal(id) { document.getElementById(id).classList.add('activo'); }
@@ -519,6 +521,107 @@ async function abrirHistorialCliente(cliente) {
 }
 
 document.getElementById('btnCerrarHistorial').addEventListener('click', () => ocultarModal('modalHistorialCliente'));
+
+// =========================================================
+// NOTAS (compartidas)
+// =========================================================
+
+let notaEditando = null;
+
+function fechaHoraNota(iso) {
+  if (!iso) return '';
+  const f = new Date(iso);
+  return f.toLocaleDateString() + ' ' + f.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+async function refrescarNotas() {
+  const todas = await Notas.listarNotas();
+  const pendientes = todas.filter((n) => !n.cerrada);
+  const importantes = pendientes.filter((n) => n.importante);
+
+  // Contador junto a "Notas" en el menú Más
+  const contador = document.getElementById('contadorNotas');
+  contador.textContent = String(pendientes.length);
+  contador.style.display = pendientes.length > 0 ? 'inline-block' : 'none';
+
+  document.getElementById('resumenNotasPendientes').textContent = String(pendientes.length);
+  document.getElementById('resumenNotasImportantes').textContent = String(importantes.length);
+
+  const filtro = document.getElementById('filtroNotas').value;
+  let lista = todas;
+  if (filtro === 'pendientes') lista = pendientes;
+  else if (filtro === 'cerradas') lista = todas.filter((n) => n.cerrada);
+
+  const contenedor = document.getElementById('listaNotas');
+  if (lista.length === 0) {
+    contenedor.innerHTML = '<div class="vacio">' +
+      (filtro === 'cerradas' ? 'No hay notas cerradas.' : 'No hay notas. Toca "+" para escribir la primera.') + '</div>';
+    return;
+  }
+
+  contenedor.innerHTML = lista.map((n) => `
+    <div class="card" data-id="${n.id}" style="${n.importante && !n.cerrada ? 'border-left:4px solid var(--rojo);' : ''}${n.cerrada ? 'opacity:0.65;' : ''}">
+      <div class="info">
+        ${n.cerrada ? '<span class="chip oculto">Cerrada</span>' : (n.importante ? '<span class="chip estado-cancelado">Importante</span>' : '')}
+        <p style="white-space:pre-wrap;color:var(--texto);font-size:15px;">${escaparHtml(n.texto)}</p>
+        <p style="font-size:12px;color:#888;">${fechaHoraNota(n.creadoEl)}${n.cerrada && n.cerradaEl ? ' &middot; cerrada ' + fechaHoraNota(n.cerradaEl) : ''}</p>
+      </div>
+    </div>
+  `).join('');
+
+  contenedor.querySelectorAll('.card').forEach((card) => {
+    card.addEventListener('click', async () => {
+      const notas = await Notas.listarNotas();
+      const nota = notas.find((x) => x.id === card.dataset.id);
+      if (nota) abrirModalNota(nota);
+    });
+  });
+}
+
+document.getElementById('filtroNotas').addEventListener('change', refrescarNotas);
+
+function abrirModalNota(nota = null) {
+  notaEditando = nota;
+  document.getElementById('tituloModalNota').textContent = nota ? 'Editar nota' : 'Nueva nota';
+  document.getElementById('campoNotaTexto').value = nota?.texto || '';
+  document.getElementById('campoNotaImportante').checked = !!nota?.importante;
+  document.getElementById('notaFechaInfo').textContent = nota ? 'Escrita el ' + fechaHoraNota(nota.creadoEl) : '';
+  document.getElementById('filaAccionesNota').style.display = nota ? 'flex' : 'none';
+  document.getElementById('btnCerrarNota').textContent = nota?.cerrada ? 'Reabrir nota' : 'Cerrar nota';
+  mostrarModal('modalNota');
+}
+
+document.getElementById('btnCancelarNota').addEventListener('click', () => ocultarModal('modalNota'));
+
+document.getElementById('btnGuardarNota').addEventListener('click', async () => {
+  const texto = document.getElementById('campoNotaTexto').value.trim();
+  if (!texto) { alert('Escribe la nota.'); return; }
+  await Notas.guardarNota({
+    id: notaEditando?.id,
+    creadoEl: notaEditando?.creadoEl,
+    cerrada: notaEditando?.cerrada,
+    cerradaEl: notaEditando?.cerradaEl,
+    texto,
+    importante: document.getElementById('campoNotaImportante').checked,
+  });
+  ocultarModal('modalNota');
+  refrescarNotas();
+});
+
+document.getElementById('btnCerrarNota').addEventListener('click', async () => {
+  if (!notaEditando) return;
+  await Notas.cambiarEstadoNota(notaEditando.id, !notaEditando.cerrada);
+  ocultarModal('modalNota');
+  refrescarNotas();
+});
+
+document.getElementById('btnEliminarNota').addEventListener('click', async () => {
+  if (!notaEditando) return;
+  if (!confirm('¿Eliminar esta nota para siempre?')) return;
+  await Notas.eliminarNota(notaEditando.id);
+  ocultarModal('modalNota');
+  refrescarNotas();
+});
 
 // =========================================================
 // PROVEEDORES
@@ -1095,6 +1198,7 @@ document.getElementById('inputImportar').addEventListener('change', async (e) =>
     refrescarProveedores();
     refrescarCatalogo();
     refrescarPedidos();
+    refrescarNotas();
   } catch (err) {
     alert('No se pudo importar el respaldo: ' + err.message);
   }
@@ -1174,6 +1278,8 @@ function iniciarApp() {
   DB.escucharCambios(DB.STORES.proveedores, () => refrescarProveedores(document.getElementById('buscarProveedor').value));
   DB.escucharCambios(DB.STORES.catalogo, () => refrescarCatalogo(document.getElementById('buscarCatalogo').value));
   DB.escucharCambios(DB.STORES.pedidos, () => refrescarPedidos());
+  DB.escucharCambios(DB.STORES.notas, () => refrescarNotas());
+  refrescarNotas();
 }
 
 DB.alCambiarSesion(async (usuario) => {
