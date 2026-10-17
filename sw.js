@@ -1,22 +1,25 @@
 // Service Worker de Encantos — habilita el uso 100% sin internet
-const CACHE_NAME = 'encantos-cache-v36';
+const CACHE_NAME = 'encantos-cache-v10';
 const ASSETS = [
   './',
   './index.html',
+  './catalogo.html',
   './manifest.json',
   './css/styles.css',
+  './js/firebase-config.js',
   './js/db.js',
   './js/app.js',
   './js/inventario.js',
-  './js/catalogo.js',
   './js/ventas.js',
-  './js/compras.js',
   './js/clientes.js',
   './js/proveedores.js',
+  './js/catalogo.js',
+  './js/pedidos.js',
+  './js/negocio.js',
+  './js/catalogo-publico.js',
   './js/reportes.js',
   './js/backup.js',
   './js/busqueda-visual.js',
-  './js/cuidados.js',
   'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
   'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
   'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
@@ -36,9 +39,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
         ASSETS.map((url) =>
-          // cache:'reload' = pedir siempre el archivo nuevo al servidor, nunca una
-          // copia vieja guardada por el navegador
-          cache.add(new Request(url, { cache: 'reload' })).catch((err) => {
+          cache.add(url).catch((err) => {
             // No detener la instalación si un asset opcional aún no existe
             console.warn('No se pudo cachear', url, err);
           })
@@ -52,9 +53,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        // Solo borrar cachés viejas de ENCANTOS: ApiCampo y otras apps viven en el
-        // mismo sitio (juceas.github.io) y sus cachés no se deben tocar.
-        keys.filter((k) => k.startsWith('encantos-cache') && k !== CACHE_NAME).map((k) => caches.delete(k))
+        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
       )
     ).then(() => self.clients.claim())
   );

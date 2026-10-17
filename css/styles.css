@@ -56,14 +56,10 @@ nav.tabbar {
 
 nav.tabbar button {
   flex: 1;
-  min-width: 0;
-  padding: 9px 0;
+  padding: 10px 4px;
   background: none;
   border: none;
-  font-size: 9.5px;
-  letter-spacing: -0.2px;
-  white-space: nowrap;
-  overflow: hidden;
+  font-size: 11px;
   color: #777;
   display: flex;
   flex-direction: column;
@@ -73,7 +69,7 @@ nav.tabbar button {
 }
 
 nav.tabbar button.activo { color: var(--verde); font-weight: 600; }
-nav.tabbar button .emoji { font-size: 19px; }
+nav.tabbar button .emoji { font-size: 20px; }
 
 .card {
   background: white;
@@ -205,238 +201,53 @@ textarea { resize: vertical; min-height: 60px; }
 
 .cargando { text-align: center; padding: 20px; color: #888; font-size: 14px; }
 
-/* ---------- Pantalla de acceso ---------- */
-.pantalla-acceso {
-  position: fixed; inset: 0; z-index: 100;
+/* ---------- Inicio de sesión ---------- */
+.login-overlay {
+  display: none;
+  position: fixed; inset: 0;
   background: var(--crema);
-  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+.login-overlay.activo { display: flex; }
+.login-caja {
+  background: white;
+  width: 100%;
+  max-width: 380px;
+  border-radius: 16px;
   padding: 24px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
 }
-.pantalla-acceso.oculta { display: none; }
-.caja-acceso {
-  background: var(--blanco); border: 1px solid var(--borde); border-radius: 16px;
-  padding: 28px 22px; width: 100%; max-width: 360px; text-align: center;
+.login-caja h1 { margin: 0 0 4px; font-size: 22px; color: var(--verde); }
+.login-caja p { font-size: 14px; color: #666; margin: 0 0 8px; }
+.login-caja .btn { margin-top: 14px; }
+.login-error { color: var(--rojo); font-size: 13px; min-height: 18px; margin-top: 10px !important; }
+.login-nota { font-size: 12px !important; color: #999 !important; margin-top: 12px !important; text-align: center; }
+
+/* ---------- Navegación: menú "Más" ---------- */
+.menu-item { cursor: pointer; }
+.menu-item:active { background: #f0ece2; }
+.volver {
+  background: none;
+  border: none;
+  color: var(--verde);
+  font-size: 15px;
+  padding: 4px 0 12px;
+  cursor: pointer;
 }
-.caja-acceso h2 { margin: 6px 0 8px; color: var(--verde); }
-.caja-acceso p { color: #666; font-size: 14px; margin: 0 0 18px; line-height: 1.4; }
-.logo-acceso { font-size: 44px; }
-.btn-sesion {
-  background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.35);
-  border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer;
-  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 
-/* ---------- Fase 2: ficha de planta y catálogo ---------- */
-.dos-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.dos-columnas > div { min-width: 0; }
-.grupo-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; }
-.grupo-etiquetas label {
-  display: inline-flex; align-items: center; gap: 6px; margin: 0;
-  border: 1px solid var(--borde); border-radius: 999px; padding: 6px 10px;
-  font-size: 13px; color: var(--texto); background: var(--blanco); cursor: pointer;
-}
-.grupo-etiquetas input { width: auto; margin: 0; }
-.grupo-etiquetas label:has(input:checked) { background: #e6efe2; border-color: var(--verde-claro); }
-.caja-catalogo {
-  margin-top: 14px; padding: 12px; border-radius: 12px;
-  background: #eef4ea; border: 1px solid #cfe0c6;
-}
-.interruptor { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; color: var(--verde); font-weight: 600; cursor: pointer; }
-.interruptor input { width: 22px; height: 22px; margin: 0; accent-color: var(--verde); }
-.nota-catalogo { font-size: 12px; color: #666; margin: 8px 0 0; line-height: 1.4; }
-.aviso-catalogo { font-size: 12px; color: var(--tierra); margin: 6px 0 0; font-weight: 600; }
-.aviso-catalogo:empty { display: none; }
-.filtro-categoria { margin: -2px 0 12px; }
-.chip.catalogo { background: #e6efe2; color: var(--verde); }
+/* ---------- Casillas ---------- */
+input[type="checkbox"] { width: auto; margin-right: 8px; }
+label.fila-check { display: flex; align-items: center; font-size: 14px; margin-top: 14px; color: var(--texto); }
 
-/* ---------- Productos sin existencias ---------- */
-.card.sin-stock { opacity: 0.6; }
-.card .agotado { color: var(--rojo); font-weight: 700; }
-
-/* ---------- Fase 3: compartir catálogo ---------- */
-.fila-catalogo { display: flex; gap: 8px; margin: -4px 0 12px; }
-.fila-catalogo .btn { flex: 1; }
-.fila-compartir {
-  display: flex; align-items: center; gap: 8px; padding: 10px 0;
-  border-bottom: 1px solid var(--borde);
-}
-.fila-compartir .nom { flex: 1; font-size: 14px; min-width: 0; }
-.fila-compartir .nom small { color: #888; }
-.fila-compartir .btn { width: auto; padding: 8px 10px; font-size: 13px; }
-.btn.whatsapp { background: #1f9d55; }
-
-/* ---------- Vendedoras ---------- */
-.vendedora { border: 1px solid var(--borde); border-radius: 12px; padding: 10px; margin-top: 8px; background: var(--blanco); }
-.vendedora .dos-columnas label { margin-top: 0; }
-.vendedora .quitar { background: none; border: none; color: var(--rojo); font-size: 13px; cursor: pointer; padding: 6px 0 0; }
-.nota-envio { font-size: 13px; background: #eef4ea; border-radius: 10px; padding: 8px 10px; margin: 8px 0; color: var(--verde); }
-
-/* ---------- Menú de acciones ---------- */
-.menu-acciones .modal { display: flex; flex-direction: column; gap: 10px; }
-.menu-acciones .modal h2 { margin: 0 0 4px; }
-.menu-acciones .mensaje-accion { margin: 0 0 4px; font-size: 14px; color: #444; line-height: 1.4; }
-.btn.btn-cancelar { background: transparent; color: #666; border: 1px solid var(--borde); }
-
-/* ---------- Pestaña de agotados ---------- */
-nav.tabbar button .emoji { position: relative; }
-nav.tabbar .insignia {
-  position: absolute; top: -4px; left: 13px;
-  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  background: var(--rojo); color: #fff; font-size: 10px; font-weight: 700;
-  line-height: 18px; text-align: center; font-style: normal;
-}
-nav.tabbar button#tabAgotados.activo { color: var(--rojo); }
-.titulo-agotados {
-  margin: 4px 0 10px; padding: 10px 12px; border-radius: 10px;
-  background: #f7e1dd; color: var(--rojo); font-weight: 700; font-size: 15px;
-}
-.titulo-agotados small { display: block; font-weight: 400; font-size: 12px; color: #7a4a42; margin-top: 2px; }
-
-/* ---------- Ventas anuladas ---------- */
-.ayuda-lista { font-size: 12px; color: #888; margin: 0 0 8px; }
-.card.venta-anulada { opacity: 0.6; }
-.card.venta-anulada h3, .card.venta-anulada .precio { text-decoration: line-through; }
-.chip.anulada { background: var(--rojo); text-decoration: none; display: inline-block; }
-.nota-anulada { font-size: 12px; color: var(--rojo); }
-
-/* ---------- Resumen del mes (Ventas) ---------- */
-.selector-mes { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; }
-.selector-mes .nombre-mes {
-  flex: 1; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--borde);
-  background: #fff; font-family: inherit; font-size: 15px; font-weight: 700; color: var(--verde); cursor: pointer;
-}
-.selector-mes .flecha-mes {
-  width: 40px; height: 38px; border-radius: 10px; border: 1px solid var(--borde);
-  background: #fff; color: var(--verde); font-size: 15px; cursor: pointer;
-}
-.selector-mes .flecha-mes:disabled { opacity: 0.3; cursor: default; }
-.resumen-grid.tres { gap: 8px; margin-bottom: 4px; }
-.resumen-grid.tres .card { padding: 10px 6px; }
-.resumen-grid.tres .valor { font-size: 16px; }
-.nota-margen { font-size: 12px; color: #777; margin: 0 0 12px; line-height: 1.4; }
-.valor.margen-bajo { color: var(--rojo) !important; }
-
-/* ---------- Compras ---------- */
-.card.compra-anulada { opacity: 0.6; }
-.card.compra-anulada h3, .card.compra-anulada .precio { text-decoration: line-through; }
-
-/* ---------- Factura de compra ---------- */
-.fila-dos { display: flex; gap: 8px; }
-.fila-dos label { flex: 1; display: flex; flex-direction: column; }
-.linea-factura { border: 1px solid var(--borde); border-radius: 12px; padding: 8px 10px; margin: 8px 0; background: #fafaf7; }
-.linea-factura.es-nuevo { border-color: #c9a24a; background: #fffaf0; }
-.linea-cab { display: flex; align-items: center; gap: 6px; }
-.linea-cab .num { min-width: 24px; height: 24px; border-radius: 12px; background: var(--verde); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-.linea-cab input { flex: 1; margin: 0; }
-.linea-cab .l-quitar { border: none; background: none; color: #999; font-size: 16px; padding: 6px; cursor: pointer; }
-.linea-nums { display: flex; gap: 6px; align-items: flex-end; margin-top: 6px; }
-.linea-nums label { flex: 1; font-size: 11px; color: #666; display: flex; flex-direction: column; margin: 0; }
-.linea-nums input, .linea-nums select { margin: 2px 0 0; padding: 8px; }
-.linea-nums .l-sub { flex: 1; font-size: 11px; color: #666; display: flex; flex-direction: column; padding-bottom: 8px; }
-.linea-nums .l-sub b { font-size: 14px; color: #333; }
-.aviso-nuevo { font-size: 12px; color: #8a6d1f; margin-top: 6px; font-weight: 600; }
-.linea-info { font-size: 12px; color: #4b6b46; margin-top: 4px; }
-.linea-info:empty { display: none; }
-.linea-info.alerta { color: var(--rojo); font-weight: 600; }
-.resumen-factura { background: #eef5ec; border-radius: 12px; padding: 10px 12px; margin-top: 12px; font-size: 14px; }
-.resumen-factura div { display: flex; justify-content: space-between; padding: 2px 0; }
-.resumen-factura .total { border-top: 1px solid #c9dcc4; margin-top: 4px; padding-top: 6px; font-size: 16px; color: var(--verde); }
-.resumen-factura .unidades { font-size: 12px; color: #666; justify-content: flex-end; }
-.menu-acciones .mensaje-accion { white-space: pre-line; }
-.chip.corregida { background: #8a6d1f; }
-
-/* ---------- Ventana de motivo al anular ---------- */
-.menu-acciones .m-regreso { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #333; margin: 6px 0 0; }
-.menu-acciones .m-regreso input { width: auto; margin: 0; }
-.menu-acciones .m-error { color: var(--rojo); font-size: 13px; margin: 0; min-height: 0; }
-.menu-acciones .m-error:empty { display: none; }
-.menu-acciones textarea { font-family: inherit; }
-
-/* ---------- Desglose de ganancia ---------- */
-.resumen-grid.dos-pct { gap: 8px; margin-bottom: 4px; }
-.resumen-grid.dos-pct .card { padding: 10px 6px; }
-.resumen-grid.dos-pct .valor { font-size: 18px; }
-.valor.valor-costo { color: #8a6d1f !important; }
-.pct-venta { font-size: 12px; color: #4b6b46; margin: 2px 0 0; }
-.desglose-venta { background: #eef5ec; border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
-.desglose-venta div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
-.desglose-venta .total { border-top: 1px solid #c9dcc4; margin-top: 4px; padding-top: 6px; font-size: 15px; color: var(--verde); }
-.desglose-venta .pcts { color: #4b6b46; font-weight: 600; }
-.desglose-venta .aviso { color: #8a6d1f; font-size: 12px; }
-.desglose-venta b.negativa { color: var(--rojo); }
-
-/* ---------- Enviar catálogo a un cliente ---------- */
-.envio-catalogo .e-lista { display: flex; flex-direction: column; gap: 6px; max-height: 32vh; overflow-y: auto; }
-.envio-catalogo .e-op { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 10px; font-size: 14px; color: #333; }
-.envio-catalogo .e-op:has(input:checked) { background: #e6efe2; border-color: var(--verde-claro); }
-.envio-catalogo .e-op input { width: auto; margin: 0; }
-.envio-catalogo .e-op span { flex: 1; }
-.envio-catalogo .e-op small { color: #888; }
-.envio-catalogo textarea { font-family: inherit; font-size: 13px; }
-.envio-catalogo .fila-botones { margin-top: 0; }
-.ultimo-catalogo { font-size: 12px; color: #4b6b46; }
-
-/* ---------- Coleccionistas y mayoristas ---------- */
-.filtro-tipos { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
-.chip-filtro { border: 1px solid var(--borde); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; font-family: inherit; cursor: pointer; color: #444; }
-.chip-filtro.activo { background: var(--verde); border-color: var(--verde); color: #fff; }
-.card.cliente-coleccionista { border-left: 4px solid #7b4fa0; }
-.card.cliente-mayorista { border-left: 4px solid #2f6f9f; }
-.chip.tipo-coleccionista { background: #7b4fa0; }
-.chip.tipo-mayorista { background: #2f6f9f; }
-.interes-cliente { font-size: 12px; color: #5d4a6e; }
-.avisos-coleccion .aviso-cliente { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--borde); border-radius: 10px; font-size: 14px; }
-.avisos-coleccion .aviso-cliente small { color: #666; }
-.avisos-coleccion .aviso-cliente.avisado { background: #e6efe2; }
-.avisos-coleccion .botones-wa { display: flex; flex-direction: column; gap: 4px; }
-.avisos-coleccion .btn.chico { width: auto; white-space: nowrap; }
-.avisos-coleccion .sin-numero { color: var(--rojo) !important; }
-
-/* ---------- Plantas que busca el cliente ---------- */
-.deseos-cliente { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.deseos-cliente:empty { display: none; }
-.deseo-chip { display: inline-flex; align-items: center; gap: 4px; background: #e6efe2; border: 1px solid var(--verde-claro); border-radius: 999px; padding: 4px 4px 4px 10px; font-size: 13px; color: #2d4a2a; }
-.deseo-chip button { border: 0; background: transparent; font-size: 15px; line-height: 1; padding: 2px 6px; cursor: pointer; color: #6b3a3a; }
-.fila-deseo { display: flex; gap: 6px; align-items: center; }
-.fila-deseo input { flex: 1; margin: 0; }
-.fila-deseo .btn.chico { width: auto; white-space: nowrap; margin: 0; }
-.sugerencias-deseo { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-.sugerencias-deseo:empty { display: none; }
-.sugerencias-deseo button { text-align: left; border: 1px solid var(--borde); background: #fff; border-radius: 8px; padding: 8px 10px; font-size: 14px; font-family: inherit; cursor: pointer; color: #333; }
-.sugerencias-deseo button small { color: #888; }
-.intereses-cliente { margin: 8px 0; border: 1px dashed var(--borde); border-radius: 10px; padding: 8px 10px; }
-.intereses-cliente summary { cursor: pointer; font-size: 14px; color: #4b6b46; }
-.intereses-cliente[open] summary { margin-bottom: 8px; }
-
-/* ---------- Ubicación del cliente ---------- */
-.fila-ubicacion { display: flex; gap: 6px; }
-.fila-ubicacion select { flex: 1; min-width: 0; }
-.fila-lugar { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; }
-.fila-lugar select { flex: 1; min-width: 0; margin: 0; }
-.fila-lugar .btn.chico { white-space: nowrap; margin: 0; }
-.lugar-cliente { font-size: 12px; color: #555; }
-.lugar-cliente.sin { color: #a0703a; }
-.resumen-lugares select { margin-bottom: 8px; }
-.resumen-lugares .r-lista { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; }
-.resumen-lugares .r-fila { border: 1px solid var(--borde); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
-.resumen-lugares .r-fila b { display: block; }
-.resumen-lugares .r-fila small { color: #666; display: block; }
-.resumen-lugares .r-barra { height: 6px; background: var(--verde-claro); border-radius: 3px; margin-top: 6px; }
-.resumen-lugares .r-fila.gris { background: #f6f3ee; }
-
-/* ---------- Identificar planta con foto (Pl@ntNet) ---------- */
-.btn.btn-identificar { background: #fff; color: var(--verde); border: 2px solid var(--verde-claro); margin-top: 8px; }
-.identificar .id-foto { width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; }
-.identificar .id-lista { display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto; }
-.identificar .id-op { text-align: left; border: 1px solid var(--borde); background: #fff; border-radius: 10px; padding: 10px; font-family: inherit; font-size: 14px; cursor: pointer; color: #333; }
-.identificar .id-op b { display: block; font-style: italic; }
-.identificar .id-op small { display: block; color: #666; }
-.identificar .id-pct { float: right; font-weight: bold; color: var(--verde); font-style: normal; }
-.identificar .id-pct.baja { color: #a0703a; }
-.identificar .id-nota { font-size: 12px; color: #777; margin: 6px 0 0; }
-.identificar input { margin-bottom: 4px; }
-.identificar ol { padding-left: 18px; font-size: 13px; color: #444; margin: 4px 0 8px; }
-.nota-identificacion { font-size: 13px; color: #2d4a2a; background: #e6efe2; border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; }
-.nota-identificacion:empty { display: none; }
-.nota-identificacion.sin-ficha { background: #f6f3ee; color: #6b4a2a; }
-#modalProducto textarea { font-family: inherit; }
+/* ---------- Estados de pedidos ---------- */
+.chip.estado-solicitado { background: #8b8b8b; }
+.chip.estado-pedido { background: var(--tierra); }
+.chip.estado-llego { background: #2f7aa3; }
+.chip.estado-avisado { background: #b8860b; }
+.chip.estado-entregado { background: var(--verde); }
+.chip.estado-cancelado { background: var(--rojo); }
+.chip.oculto { background: #aaa; }

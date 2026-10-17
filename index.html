@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="theme-color" content="#3f6b3f">
 <title>Encantos</title>
 <link rel="manifest" href="manifest.json">
@@ -11,20 +11,24 @@
 </head>
 <body>
 
+<!-- ============ INICIO DE SESIÓN ============ -->
+<div class="login-overlay" id="pantallaLogin">
+  <form class="login-caja" id="formLogin">
+    <h1>🌿 Encantos</h1>
+    <p>Inicia sesión para entrar a tu vivero.</p>
+    <label for="loginCorreo">Correo</label>
+    <input type="email" id="loginCorreo" autocomplete="username" required>
+    <label for="loginClave">Contraseña</label>
+    <input type="password" id="loginClave" autocomplete="current-password" required>
+    <p class="login-error" id="loginError"></p>
+    <button type="submit" class="btn" id="btnLogin">Entrar</button>
+    <p class="login-nota">La primera vez necesitas internet; después la app funciona sin conexión.</p>
+  </form>
+</div>
+
 <header class="topbar">
   <h1>🌿 Encantos</h1>
-  <button id="btnSesion" class="btn-sesion" style="display:none;" title="Cerrar sesión"></button>
 </header>
-
-<!-- ============ PANTALLA DE ACCESO ============ -->
-<div id="pantallaAcceso" class="pantalla-acceso">
-  <div class="caja-acceso">
-    <div class="logo-acceso">🌿</div>
-    <h2>Encantos</h2>
-    <p id="mensajeAcceso">Comprobando sesión...</p>
-    <button class="btn" id="btnEntrarGoogle" style="display:none;">Entrar con Google</button>
-  </div>
-</div>
 
 <main>
 
@@ -34,17 +38,12 @@
       <input type="text" id="buscarTexto" placeholder="Buscar por nombre...">
       <button id="btnBuscarFoto" title="Buscar con una foto">📷</button>
     </div>
-    <select id="filtroCategoria" class="filtro-categoria"></select>
-    <div class="fila-catalogo">
-      <button class="btn chico" id="btnCompartirCatalogo">📤 Compartir catálogo</button>
-      <button class="btn chico secundario" id="btnDatosCatalogo">⚙️ Datos del catálogo</button>
-    </div>
     <div id="listaProductos"><div class="cargando">Cargando inventario...</div></div>
   </section>
 
   <!-- ================= VENTAS ================= -->
   <section id="vista-ventas" class="vista">
-    <div class="resumen-grid" id="tarjetasHoy">
+    <div class="resumen-grid">
       <div class="card">
         <div>
           <div class="valor" id="resumenTotalHoy">L. 0</div>
@@ -58,55 +57,117 @@
         </div>
       </div>
     </div>
-    <div class="resumen-mes">
-      <div class="selector-mes" id="selectorMesVentas">
-        <button type="button" class="flecha-mes" data-dir="-1" aria-label="Mes anterior">◀</button>
-        <button type="button" class="nombre-mes" id="tituloMes">Este mes</button>
-        <button type="button" class="flecha-mes" data-dir="1" aria-label="Mes siguiente">▶</button>
-      </div>
-      <div class="resumen-grid tres">
-        <div class="card"><div><div class="valor" id="resumenVendidoMes">L. 0</div><div class="etiqueta">Vendido</div></div></div>
-        <div class="card"><div><div class="valor valor-costo" id="resumenCostoMes">L. 0</div><div class="etiqueta">Costo</div></div></div>
-        <div class="card"><div><div class="valor" id="resumenGananciaMes">L. 0</div><div class="etiqueta">Ganancia</div></div></div>
-      </div>
-      <div class="resumen-grid dos-pct">
-        <div class="card"><div><div class="valor" id="resumenSobreCostoMes">—</div><div class="etiqueta">Ganancia sobre el costo</div></div></div>
-        <div class="card"><div><div class="valor" id="resumenMargenMes">—</div><div class="etiqueta">Margen sobre la venta</div></div></div>
-      </div>
-      <p class="nota-margen" id="notaMargenMes"></p>
-    </div>
     <div id="listaVentas"><div class="cargando">Cargando ventas...</div></div>
   </section>
 
-  <!-- ================= COMPRAS ================= -->
-  <section id="vista-compras" class="vista">
-    <div class="selector-mes" id="selectorMesCompras">
-      <button type="button" class="flecha-mes" data-dir="-1" aria-label="Mes anterior">◀</button>
-      <button type="button" class="nombre-mes" id="tituloMesCompras">Este mes</button>
-      <button type="button" class="flecha-mes" data-dir="1" aria-label="Mes siguiente">▶</button>
-    </div>
+  <!-- ================= PEDIDOS ================= -->
+  <section id="vista-pedidos" class="vista">
     <div class="resumen-grid">
-      <div class="card"><div><div class="valor" id="resumenComprasMes">L. 0</div><div class="etiqueta">Comprado en el mes</div></div></div>
-      <div class="card"><div><div class="valor" id="resumenUnidadesMes">0</div><div class="etiqueta">Unidades en el mes</div></div></div>
+      <div class="card">
+        <div>
+          <div class="valor" id="resumenPedidosActivos">0</div>
+          <div class="etiqueta">Pedidos activos</div>
+        </div>
+      </div>
+      <div class="card">
+        <div>
+          <div class="valor" id="resumenPedidosSaldo">L. 0</div>
+          <div class="etiqueta">Por cobrar</div>
+        </div>
+      </div>
     </div>
-    <div id="listaCompras"><div class="cargando">Cargando compras...</div></div>
+    <div class="buscador">
+      <select id="filtroPedidos">
+        <option value="activos">Pedidos activos</option>
+        <option value="todos">Todos</option>
+        <option value="Entregado">Entregados</option>
+        <option value="Cancelado">Cancelados</option>
+      </select>
+    </div>
+    <div id="listaPedidos"><div class="cargando">Cargando pedidos...</div></div>
   </section>
 
   <!-- ================= CLIENTES ================= -->
   <section id="vista-clientes" class="vista">
     <div class="buscador">
-      <input type="text" id="buscarCliente" placeholder="Buscar cliente o planta que busca...">
-    </div>
-    <div class="filtro-tipos" id="filtroTiposCliente"></div>
-    <div class="fila-lugar">
-      <select id="filtroLugarCliente" aria-label="Filtrar por municipio"></select>
-      <button type="button" class="btn secundario chico" id="btnResumenLugares">📊 Por municipio</button>
+      <input type="text" id="buscarCliente" placeholder="Buscar cliente...">
     </div>
     <div id="listaClientes"><div class="cargando">Cargando clientes...</div></div>
   </section>
 
+  <!-- ================= MÁS ================= -->
+  <section id="vista-mas" class="vista">
+    <div class="card menu-item" data-ir="catalogo">
+      <div class="info"><h3>📖 Catálogo de encargos</h3><p>Plantas que no tenemos pero podemos traer</p></div>
+    </div>
+    <div class="card menu-item" data-ir="proveedores">
+      <div class="info"><h3>🚚 Proveedores</h3><p>De dónde compramos las plantas</p></div>
+    </div>
+    <div class="card menu-item" data-ir="reportes">
+      <div class="info"><h3>📊 Reportes y respaldo</h3><p>PDF para compartir por WhatsApp</p></div>
+    </div>
+    <div class="card menu-item" data-ir="configuracion">
+      <div class="info"><h3>⚙️ Datos del negocio</h3><p>WhatsApp, cuenta bancaria y enlace del catálogo</p></div>
+    </div>
+    <div class="fila-botones">
+      <button class="btn peligro" id="btnCerrarSesion">Cerrar sesión</button>
+    </div>
+  </section>
+
+  <!-- ================= CATÁLOGO DE ENCARGOS ================= -->
+  <section id="vista-catalogo" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
+    <div class="fila-botones" style="margin-top:0;margin-bottom:12px;">
+      <button class="btn secundario" id="btnCompartirCatalogo">🔗 Compartir enlace del catálogo</button>
+    </div>
+    <div class="buscador">
+      <input type="text" id="buscarCatalogo" placeholder="Buscar en el catálogo...">
+    </div>
+    <div id="listaCatalogo"><div class="cargando">Cargando catálogo...</div></div>
+  </section>
+
+  <!-- ================= CONFIGURACIÓN DEL NEGOCIO ================= -->
+  <section id="vista-configuracion" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Datos que ve el cliente en el catálogo</h3>
+      <label>Nombre del negocio</label>
+      <input type="text" id="campoCfgNombre" placeholder="Encantos">
+      <label>WhatsApp para recibir pedidos</label>
+      <input type="tel" id="campoCfgWhatsapp" placeholder="9999-9999">
+      <label>Mensaje sobre el adelanto</label>
+      <textarea id="campoCfgAdelanto" placeholder="Ej: Para confirmar tu encargo pedimos un adelanto del 50%."></textarea>
+      <label>Banco</label>
+      <input type="text" id="campoCfgBanco" placeholder="Nombre del banco">
+      <label>Tipo de cuenta</label>
+      <select id="campoCfgTipoCuenta">
+        <option value="">Sin especificar</option>
+        <option value="Ahorros">Ahorros</option>
+        <option value="Cheques">Cheques</option>
+      </select>
+      <label>Número de cuenta</label>
+      <input type="text" id="campoCfgCuenta" inputmode="numeric" placeholder="Número de cuenta">
+      <label>Nombre del titular</label>
+      <input type="text" id="campoCfgTitular" placeholder="A nombre de quién está la cuenta">
+      <label class="fila-check"><input type="checkbox" id="campoCfgMostrarCuenta" checked> Mostrar la cuenta en el catálogo</label>
+      <div class="fila-botones">
+        <button class="btn" id="btnGuardarConfig">Guardar datos</button>
+      </div>
+    </div>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Enlace del catálogo</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">Este es el enlace que compartes con tus clientes.</p>
+      <input type="text" id="campoEnlaceCatalogo" readonly>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnCopiarEnlace">📋 Copiar</button>
+        <button class="btn" id="btnCompartirEnlace">📤 Compartir</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ================= PROVEEDORES ================= -->
   <section id="vista-proveedores" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
     <div class="buscador">
       <input type="text" id="buscarProveedor" placeholder="Buscar proveedor...">
     </div>
@@ -115,10 +176,9 @@
 
   <!-- ================= REPORTES ================= -->
   <section id="vista-reportes" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
     <div class="card" style="flex-direction:column;">
       <h3 style="margin-top:0;">Reporte de ventas</h3>
-      <label>Mes</label>
-      <input type="month" id="reporteMes">
       <label>Desde</label>
       <input type="date" id="reporteDesde">
       <label>Hasta</label>
@@ -128,22 +188,6 @@
       </div>
       <div class="fila-botones">
         <button class="btn secundario" id="btnCompartirReporte">📤 Compartir por WhatsApp</button>
-      </div>
-    </div>
-    <div class="card" style="flex-direction:column;">
-      <h3 style="margin-top:0;">Reporte de compras</h3>
-      <p style="font-size:13px;color:#666;margin-top:0;">Lo que compraron en el período: por producto, por proveedor y el detalle de cada compra.</p>
-      <label>Mes</label>
-      <input type="month" id="reporteComprasMes">
-      <label>Desde</label>
-      <input type="date" id="reporteComprasDesde">
-      <label>Hasta</label>
-      <input type="date" id="reporteComprasHasta">
-      <div class="fila-botones">
-        <button class="btn" id="btnGenerarReporteCompras">📄 Descargar PDF</button>
-      </div>
-      <div class="fila-botones">
-        <button class="btn secundario" id="btnCompartirReporteCompras">📤 Compartir por WhatsApp</button>
       </div>
     </div>
     <div class="card" style="flex-direction:column;">
@@ -164,6 +208,16 @@
       </div>
       <div class="fila-botones">
         <button class="btn secundario" id="btnCompartirReporteProveedores">📤 Compartir por WhatsApp</button>
+      </div>
+    </div>
+    <div class="card" style="flex-direction:column;">
+      <h3 style="margin-top:0;">Pedidos pendientes</h3>
+      <p style="font-size:13px;color:#666;margin-top:0;">Encargos activos agrupados por proveedor, con adelantos y saldo por cobrar.</p>
+      <div class="fila-botones">
+        <button class="btn" id="btnGenerarReportePedidos">📄 Descargar PDF</button>
+      </div>
+      <div class="fila-botones">
+        <button class="btn secundario" id="btnCompartirReportePedidos">📤 Compartir por WhatsApp</button>
       </div>
     </div>
     <div class="card" style="flex-direction:column;">
@@ -195,12 +249,10 @@
 
 <nav class="tabbar">
   <button class="tab activo" data-vista="inventario"><span class="emoji">🌱</span>Inventario</button>
-  <button class="tab" data-vista="agotados" id="tabAgotados"><span class="emoji">⛔<span class="insignia" id="insigniaAgotados" hidden></span></span>Agotados</button>
   <button class="tab" data-vista="ventas"><span class="emoji">💰</span>Ventas</button>
-  <button class="tab" data-vista="compras"><span class="emoji">🛒</span>Compras</button>
+  <button class="tab" data-vista="pedidos"><span class="emoji">📦</span>Pedidos</button>
   <button class="tab" data-vista="clientes"><span class="emoji">👤</span>Clientes</button>
-  <button class="tab" data-vista="proveedores"><span class="emoji">🚚</span>Proveedores</button>
-  <button class="tab" data-vista="reportes"><span class="emoji">📊</span>Reportes</button>
+  <button class="tab" data-vista="mas"><span class="emoji">☰</span>Más</button>
 </nav>
 
 <!-- ============ MODAL: Producto ============ -->
@@ -214,62 +266,25 @@
       <button class="btn secundario" id="btnTomarFoto">📷 Tomar foto</button>
       <button class="btn secundario" id="btnElegirGaleria">🖼️ Elegir de galería</button>
     </div>
-    <button class="btn btn-identificar" id="btnIdentificarPlanta" type="button" style="display:none;">🔎 Identificar la planta con esta foto</button>
-    <p class="nota-identificacion" id="notaIdentificacion"></p>
 
     <label>Categoría</label>
     <select id="campoCategoria"></select>
 
     <label>Nombre</label>
-    <input type="text" id="campoNombre">
+    <input type="text" id="campoNombre" placeholder="Ej: Rosa roja, Piedra pómez 1kg...">
 
     <label>Descripción</label>
-    <textarea id="campoDescripcion"></textarea>
+    <textarea id="campoDescripcion" placeholder="Detalles de la planta o producto..."></textarea>
 
-    <!-- Datos de la planta: se ocultan cuando es un insumo -->
-    <div id="camposPlanta">
-      <label>Nombre científico (opcional)</label>
-      <input type="text" id="campoNombreCientifico">
+    <label>Tipo de sol (si aplica)</label>
+    <select id="campoTipoSol">
+      <option value="">No aplica</option>
+    </select>
 
-      <div class="dos-columnas">
-        <div>
-          <label>Luz</label>
-          <select id="campoTipoSol"></select>
-        </div>
-        <div>
-          <label>Riego</label>
-          <select id="campoRiego"></select>
-        </div>
-      </div>
-
-      <div class="dos-columnas">
-        <div>
-          <label>Ubicación</label>
-          <select id="campoUbicacion"></select>
-        </div>
-        <div>
-          <label>Cuidado</label>
-          <select id="campoDificultad"></select>
-        </div>
-      </div>
-
-      <label>Mascotas</label>
-      <select id="campoMascotas"></select>
-
-      <div class="dos-columnas">
-        <div>
-          <label>Tamaño de maceta</label>
-          <input type="text" id="campoTamanoMaceta" placeholder='Ej: 6"'>
-        </div>
-        <div>
-          <label>Tamaño adulto</label>
-          <input type="text" id="campoTamanoAdulto" placeholder="Ej: hasta 80 cm">
-        </div>
-      </div>
-    </div>
-
-    <label>Etiquetas</label>
-    <div id="campoEtiquetas" class="grupo-etiquetas"></div>
+    <label>Frecuencia de riego (si aplica)</label>
+    <select id="campoRiego">
+      <option value="">No aplica</option>
+    </select>
 
     <label>Origen</label>
     <select id="campoOrigen">
@@ -294,65 +309,12 @@
     <label>Cantidad en stock</label>
     <input type="number" id="campoStock" min="0" placeholder="0">
 
-    <div class="caja-catalogo">
-      <label class="interruptor">
-        <input type="checkbox" id="campoPublicarCatalogo">
-        <span>🛒 Publicar en el catálogo para clientes</span>
-      </label>
-      <p class="nota-catalogo">Los clientes verán la foto, el nombre, el precio, la luz, el riego y la descripción. <strong>Nunca</strong> el costo, el proveedor ni el stock exacto.</p>
-      <p class="aviso-catalogo" id="avisoCatalogo"></p>
-    </div>
-
     <div class="fila-botones">
       <button class="btn secundario" id="btnCancelarProducto">Cancelar</button>
       <button class="btn" id="btnGuardarProducto">Guardar</button>
     </div>
     <div class="fila-botones" id="filaEliminarProducto" style="display:none;">
       <button class="btn peligro" id="btnEliminarProducto">Eliminar producto</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ MODAL: Compartir catálogo ============ -->
-<div class="modal-overlay" id="modalCompartir">
-  <div class="modal">
-    <h2>Compartir catálogo</h2>
-    <p class="nota-catalogo" style="margin-top:0">Envía el enlace de todo el catálogo o solo de una categoría. Tus clientes ven fotos, precios y cuidados, y te piden por WhatsApp.</p>
-    <p class="aviso-catalogo" id="avisoSinNumero"></p>
-    <div id="listaCompartir"><div class="cargando">Cargando...</div></div>
-    <div class="fila-botones">
-      <button class="btn secundario" id="btnCerrarCompartir">Cerrar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ MODAL: Datos del catálogo ============ -->
-<div class="modal-overlay" id="modalDatosCatalogo">
-  <div class="modal">
-    <h2>Datos del catálogo</h2>
-    <p class="nota-catalogo" style="margin-top:0">Esto lo ve cualquier persona que abra el catálogo.</p>
-
-    <label>Número principal de WhatsApp para pedidos</label>
-    <input type="tel" id="cfgWhatsapp" placeholder="Ej: 9876-5432" inputmode="tel">
-    <p class="nota-catalogo">Aquí llegan los pedidos de quien abra el catálogo sin enlace de una vendedora (por ejemplo, desde Instagram). Si es de Honduras, basta con los 8 dígitos.</p>
-
-    <label>Vendedoras</label>
-    <p class="nota-catalogo" style="margin-top:0">Cuando una vendedora comparte el catálogo desde su app, los pedidos de esos clientes le llegan a su WhatsApp.</p>
-    <div id="cfgVendedores"></div>
-    <button class="btn chico secundario" id="btnAgregarVendedora" type="button" style="margin-top:8px">+ Agregar vendedora</button>
-
-    <label>Nombre del negocio</label>
-    <input type="text" id="cfgNegocio" placeholder="Encantos">
-
-    <label>Mensaje de bienvenida (opcional)</label>
-    <textarea id="cfgBienvenida" placeholder="Ej: Plantas sanas y bonitas, listas para tu hogar. Hacemos entregas en la ciudad."></textarea>
-
-    <label>Ubicación u horario (opcional)</label>
-    <input type="text" id="cfgUbicacion" placeholder="Ej: Tegucigalpa · Entregas de lunes a sábado">
-
-    <div class="fila-botones">
-      <button class="btn secundario" id="btnCancelarDatos">Cancelar</button>
-      <button class="btn" id="btnGuardarDatos">Guardar</button>
     </div>
   </div>
 </div>
@@ -376,35 +338,6 @@
 </div>
 
 <!-- ============ MODAL: Venta ============ -->
-<div class="modal-overlay" id="modalCompra">
-  <div class="modal modal-factura">
-    <h2>🧾 Registrar compra (factura)</h2>
-    <p class="nota-envio" id="avisoCorreccion" hidden>✏️ Cambia lo que esté mal y guarda. La app ajusta solo la diferencia en el stock y en los costos, y la compra anterior queda como historial.</p>
-    <label>Proveedor</label>
-    <select id="campoProveedorCompra"></select>
-    <div class="fila-dos">
-      <label>Fecha<input type="date" id="campoFechaCompra"></label>
-      <label>N.º de factura<input type="text" id="campoNumeroFactura" maxlength="40" placeholder="Opcional"></label>
-    </div>
-    <label>¿Cuántos productos trae la factura?</label>
-    <input type="number" id="campoNumLineas" min="1" max="200" step="1" inputmode="numeric" value="1">
-    <p class="nota-envio">Escribe el nombre en cada fila. Si no existe en el inventario, se crea al guardar.</p>
-    <div id="lineasFactura"></div>
-    <button type="button" class="btn secundario" id="btnAgregarLinea">➕ Agregar producto</button>
-    <label>Costo de transporte (L.)</label>
-    <input type="number" id="campoTransporte" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-    <p class="nota-envio">El transporte se reparte entre los productos según su valor y se suma a su costo.</p>
-    <label>Nota (opcional)</label>
-    <input type="text" id="campoNotaCompra" maxlength="200" placeholder="Ej.: vivero de Comayagua">
-    <div class="resumen-factura" id="resumenFactura"></div>
-    <datalist id="listaProductosCompra"></datalist>
-    <div class="fila-botones">
-      <button class="btn secundario" id="btnCancelarCompra">Cerrar</button>
-      <button class="btn" id="btnConfirmarCompra">Guardar factura</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modalVenta">
   <div class="modal">
     <h2>Registrar venta</h2>
@@ -417,7 +350,7 @@
     <input type="number" id="campoCantidadVenta" min="1" value="1">
     <label>Precio de venta unitario (L.)</label>
     <input type="number" id="campoPrecioVenta" step="0.01" min="0">
-    <div class="desglose-venta" id="desgloseVenta"></div>
+    <p style="font-size:13px;color:#666;">Ganancia estimada: <b id="gananciaEstimada">L. 0.00</b></p>
     <div class="fila-botones">
       <button class="btn secundario" id="btnCancelarVenta">Cancelar</button>
       <button class="btn" id="btnConfirmarVenta">Confirmar venta</button>
@@ -433,27 +366,6 @@
     <input type="text" id="campoNombreCliente" placeholder="Nombre del cliente">
     <label>Celular</label>
     <input type="tel" id="campoCelularCliente" placeholder="9999-9999">
-    <label>📍 ¿De dónde es?</label>
-    <div class="fila-ubicacion">
-      <select id="campoDepartamentoCliente" aria-label="Departamento"></select>
-      <select id="campoMunicipioCliente" aria-label="Municipio"></select>
-    </div>
-    <input type="text" id="campoLocalidadCliente" list="listaLocalidades" placeholder="Ciudad, aldea o colonia (opcional)" autocomplete="off">
-    <datalist id="listaLocalidades"></datalist>
-    <label>Tipo de cliente</label>
-    <select id="campoTipoCliente"></select>
-    <label>🔎 Plantas que anda buscando</label>
-    <div class="deseos-cliente" id="listaDeseosCliente"></div>
-    <div class="fila-deseo">
-      <input type="text" id="campoDeseoNuevo" placeholder="Escribe: aglaonema, monstera..." autocomplete="off" enterkeyhint="done">
-      <button type="button" class="btn chico" id="btnAgregarDeseo">Agregar</button>
-    </div>
-    <div class="sugerencias-deseo" id="sugerenciasDeseo"></div>
-    <p class="nota-envio">Cuando registres una compra con alguna de estas plantas, la app te avisará para ofrecérsela primero.</p>
-    <details class="intereses-cliente" id="bloqueIntereses">
-      <summary>¿Le interesa toda una categoría? (opcional)</summary>
-      <div class="grupo-etiquetas" id="campoInteresesCliente"></div>
-    </details>
     <label>Notas (opcional)</label>
     <textarea id="campoNotasCliente"></textarea>
     <div class="fila-botones">
@@ -488,6 +400,105 @@
   </div>
 </div>
 
+<!-- ============ MODAL: Catálogo de encargos ============ -->
+<div class="modal-overlay" id="modalCatalogo">
+  <div class="modal">
+    <h2 id="tituloModalCatalogo">Nueva planta en el catálogo</h2>
+    <img id="previewFotoCatalogo" class="preview-foto" style="display:none;">
+    <input type="file" id="inputCamaraCatalogo" accept="image/*" capture="environment" style="display:none;">
+    <input type="file" id="inputGaleriaCatalogo" accept="image/*" style="display:none;">
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnTomarFotoCatalogo">📷 Tomar foto</button>
+      <button class="btn secundario" id="btnElegirGaleriaCatalogo">🖼️ Elegir de galería</button>
+    </div>
+
+    <label>Categoría</label>
+    <select id="campoCatCategoria"></select>
+
+    <label>Nombre</label>
+    <input type="text" id="campoCatNombre" placeholder="Ej: Orquídea blanca">
+
+    <label>Descripción</label>
+    <textarea id="campoCatDescripcion" placeholder="Lo que el cliente debe saber de la planta..."></textarea>
+
+    <label>Tipo de sol (si aplica)</label>
+    <select id="campoCatTipoSol"></select>
+
+    <label>Frecuencia de riego (si aplica)</label>
+    <select id="campoCatRiego"></select>
+
+    <label>Precio que verá el cliente (L.)</label>
+    <input type="number" id="campoCatPrecio" step="0.01" min="0" placeholder="0.00">
+
+    <label>Tiempo de entrega aproximado</label>
+    <input type="text" id="campoCatTiempo" placeholder="Ej: 1 a 2 semanas">
+
+    <label>Proveedor (opcional, solo lo ven ustedes)</label>
+    <select id="campoCatProveedor"></select>
+
+    <label class="fila-check"><input type="checkbox" id="campoCatVisible" checked> Mostrar en el catálogo público</label>
+
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarCatalogo">Cancelar</button>
+      <button class="btn" id="btnGuardarCatalogo">Guardar</button>
+    </div>
+    <div class="fila-botones" id="filaEliminarCatalogo" style="display:none;">
+      <button class="btn peligro" id="btnEliminarCatalogo">Quitar del catálogo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Pedido ============ -->
+<div class="modal-overlay" id="modalPedido">
+  <div class="modal">
+    <h2 id="tituloModalPedido">Nuevo pedido</h2>
+
+    <label>Planta pedida</label>
+    <select id="campoPedidoProducto"></select>
+    <div id="filaPedidoOtro" style="display:none;">
+      <label>Nombre de la planta</label>
+      <input type="text" id="campoPedidoOtroNombre" placeholder="Ej: Anturio rojo">
+    </div>
+
+    <label>Cliente</label>
+    <select id="campoPedidoCliente"></select>
+    <p style="font-size:12px;color:#666;margin:4px 0 0;">¿No está en la lista? Agrégalo primero en la pestaña "Clientes".</p>
+
+    <label>Cantidad</label>
+    <input type="number" id="campoPedidoCantidad" min="1" value="1">
+
+    <label>Precio unitario (L.)</label>
+    <input type="number" id="campoPedidoPrecio" step="0.01" min="0" placeholder="0.00">
+
+    <label>Costo unitario (L.) — puedes llenarlo cuando llegue</label>
+    <input type="number" id="campoPedidoCosto" step="0.01" min="0" placeholder="0.00">
+
+    <label>Adelanto recibido (L.)</label>
+    <input type="number" id="campoPedidoAdelanto" step="0.01" min="0" placeholder="0.00">
+    <p style="font-size:13px;color:#666;margin:6px 0 0;">Total: <b id="pedidoTotal">L. 0.00</b> &middot; Saldo: <b id="pedidoSaldo">L. 0.00</b></p>
+
+    <label>Fecha estimada de entrega</label>
+    <input type="date" id="campoPedidoFecha">
+
+    <label>Estado</label>
+    <select id="campoPedidoEstado"></select>
+
+    <label>Notas (opcional)</label>
+    <textarea id="campoPedidoNotas"></textarea>
+
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarPedido">Cancelar</button>
+      <button class="btn" id="btnGuardarPedido">Guardar</button>
+    </div>
+    <div class="fila-botones" id="filaEntregarPedido" style="display:none;">
+      <button class="btn secundario" id="btnEntregarPedido">✅ Entregar y registrar venta</button>
+    </div>
+    <div class="fila-botones" id="filaEliminarPedido" style="display:none;">
+      <button class="btn peligro" id="btnEliminarPedido">Eliminar pedido</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL: Historial cliente ============ -->
 <div class="modal-overlay" id="modalHistorialCliente">
   <div class="modal">
@@ -503,15 +514,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/db.js"></script>
 <script src="js/inventario.js"></script>
-<script src="js/catalogo.js"></script>
 <script src="js/busqueda-visual.js"></script>
-<script src="js/cuidados.js"></script>
 <script src="js/clientes.js"></script>
 <script src="js/proveedores.js"></script>
+<script src="js/catalogo.js"></script>
+<script src="js/pedidos.js"></script>
+<script src="js/negocio.js"></script>
 <script src="js/ventas.js"></script>
-<script src="js/compras.js"></script>
 <script src="js/reportes.js"></script>
 <script src="js/backup.js"></script>
 <script src="js/app.js"></script>

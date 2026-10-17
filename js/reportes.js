@@ -38,83 +38,31 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
   doc.setFontSize(10);
   doc.text(`Total vendido: ${formatoLempiras(totalVendido)}`, margenIzq, y);
   y += 5;
-  // Desglose: venta − costo = ganancia, y los dos porcentajes
-  const costoVendido = totalVendido - totalGanancia;
-  doc.text(`Costo de lo vendido (incluye transporte): ${formatoLempiras(costoVendido)}`, margenIzq, y);
-  y += 5;
   doc.text(`Ganancia total: ${formatoLempiras(totalGanancia)}`, margenIzq, y);
   y += 5;
-  const sobreCosto = costoVendido > 0 ? (totalGanancia / costoVendido) * 100 : null;
-  const margen = totalVendido > 0 ? (totalGanancia / totalVendido) * 100 : null;
-  doc.text(`Ganancia sobre el costo: ${sobreCosto === null ? '-' : sobreCosto.toFixed(1) + '%'}`, margenIzq, y);
-  y += 5;
-  doc.text(`Margen sobre la venta: ${margen === null ? '-' : margen.toFixed(1) + '%'}${margen === null ? '' : ` (de cada L. 100 vendidos, L. ${Math.round(margen)} son ganancia)`}`, margenIzq, y);
-  y += 5;
   doc.text(`Número de ventas: ${ventas.length}`, margenIzq, y);
-  y += 5;
-  try {
-    const { compras, total } = await Compras.totalComprado({ desde, hasta });
-    doc.text(`Compras de mercadería: ${formatoLempiras(total)} (${compras.length} compra${compras.length === 1 ? '' : 's'})`, margenIzq, y);
-    y += 5;
-    // Caja: lo que entró por ventas menos lo que salió en compras. No es lo
-    // mismo que la ganancia: lo comprado puede no haberse vendido todavía.
-    doc.text(`Vendido - Compras (caja del período): ${formatoLempiras(totalVendido - total)}`, margenIzq, y);
-    y += 5;
-  } catch (e) { console.warn('No se pudieron leer las compras', e); }
-  y += 5;
+  y += 10;
 
   doc.setFontSize(12);
   doc.text('Productos más vendidos', margenIzq, y);
   y += 6;
   doc.setFontSize(9);
   doc.text('Producto', margenIzq, y);
-  doc.text('Cant.', 100, y);
-  doc.text('Total', 118, y);
-  doc.text('Ganancia', 145, y);
-  doc.text('% s/costo', 175, y);
+  doc.text('Cant.', 110, y);
+  doc.text('Total', 135, y);
+  doc.text('Ganancia', 165, y);
   y += 4;
   doc.line(margenIzq, y, 196, y);
   y += 4;
 
   masVendidos.slice(0, 15).forEach((item) => {
     if (y > 270) { doc.addPage(); y = 18; }
-    doc.text(item.nombre.substring(0, 36), margenIzq, y);
-    doc.text(String(item.cantidad), 100, y);
-    doc.text(formatoLempiras(item.total), 118, y);
-    doc.text(formatoLempiras(item.ganancia), 145, y);
-    const costoItem = item.total - item.ganancia;
-    doc.text(costoItem > 0 ? `${Math.round((item.ganancia / costoItem) * 100)}%` : '-', 178, y);
+    doc.text(item.nombre.substring(0, 40), margenIzq, y);
+    doc.text(String(item.cantidad), 110, y);
+    doc.text(formatoLempiras(item.total), 135, y);
+    doc.text(formatoLempiras(item.ganancia), 165, y);
     y += 5;
   });
-
-  // Ventas por municipio (de dónde son los clientes)
-  try {
-    const lugares = await Clientes.resumenPorMunicipio({ desde, hasta });
-    const conVentas = lugares.filter((g) => g.ventas > 0);
-    if (conVentas.length) {
-      y += 8;
-      if (y > 250) { doc.addPage(); y = 18; }
-      doc.setFontSize(12);
-      doc.text('Ventas por municipio', margenIzq, y);
-      y += 6;
-      doc.setFontSize(9);
-      doc.text('Lugar', margenIzq, y);
-      doc.text('Ventas', 95, y);
-      doc.text('Total', 112, y);
-      doc.text('Lo que mas compran', 140, y);
-      y += 4;
-      doc.line(margenIzq, y, 196, y);
-      y += 4;
-      conVentas.forEach((g) => {
-        if (y > 280) { doc.addPage(); y = 18; }
-        doc.text(g.nombre.substring(0, 44), margenIzq, y);
-        doc.text(String(g.ventas), 98, y);
-        doc.text(formatoLempiras(g.total), 112, y);
-        doc.text(g.plantaTop.substring(0, 28), 140, y);
-        y += 5;
-      });
-    }
-  } catch (e) { console.warn('No se pudo calcular ventas por municipio', e); }
 
   y += 8;
   if (y > 260) { doc.addPage(); y = 18; }
@@ -141,162 +89,7 @@ async function construirPDFVentas({ desde = null, hasta = null } = {}) {
     y += 5;
   });
 
-  // Ventas anuladas del período, con su motivo (historial)
-  const anuladas = (await Ventas.listarVentas({ desde, hasta, incluirAnuladas: true })).filter((v) => v.anulada);
-  if (anuladas.length) {
-    y += 8;
-    if (y > 260) { doc.addPage(); y = 18; }
-    doc.setFontSize(12);
-    doc.text(`Ventas anuladas (${anuladas.length}) - no cuentan en los totales`, margenIzq, y);
-    y += 6;
-    doc.setFontSize(9);
-    anuladas.forEach((v) => {
-      if (y > 275) { doc.addPage(); y = 18; }
-      doc.text(`${new Date(v.fecha).toLocaleDateString()}  ${(v.nombreProducto || '').substring(0, 30)} x${v.cantidad}  ${formatoLempiras(v.total)}`, margenIzq, y);
-      y += 4;
-      const motivo = `Motivo: ${(v.motivoAnulacion || 'sin motivo registrado').replace(/[^\x20-\xFF]/g, '').trim()}${v.notaAnulacion ? ' - ' + v.notaAnulacion : ''}${v.regresoInventario === false ? ' (no regresó al inventario)' : ''}`;
-      doc.splitTextToSize(motivo, 175).forEach((linea) => { if (y > 280) { doc.addPage(); y = 18; } doc.text(linea, margenIzq + 4, y); y += 4; });
-      y += 2;
-    });
-  }
-
   const nombreArchivo = `encantos-ventas-${new Date().toISOString().slice(0, 10)}.pdf`;
-  return { doc, nombreArchivo };
-}
-
-// ---------------------------------------------------------
-// Reporte de COMPRAS
-// ---------------------------------------------------------
-function textoPeriodo(desde, hasta, todo) {
-  return desde || hasta
-    ? `Periodo: ${desde ? new Date(desde + 'T00:00:00').toLocaleDateString() : '...'} a ${hasta ? new Date(hasta + 'T00:00:00').toLocaleDateString() : 'hoy'}`
-    : todo;
-}
-
-async function construirPDFCompras({ desde = null, hasta = null } = {}) {
-  const doc = nuevoDocPDF('Reporte de Compras');
-  const margenIzq = 14;
-  let y = 32;
-  const { compras, total } = await Compras.totalComprado({ desde, hasta });
-  const nuevaPagina = (limite) => { if (y > limite) { doc.addPage(); y = 18; } };
-
-  doc.setFontSize(10);
-  doc.text(textoPeriodo(desde, hasta, 'Periodo: todas las compras registradas'), margenIzq, y);
-  y += 10;
-  doc.setFontSize(12);
-  doc.text('Resumen', margenIzq, y);
-  y += 6;
-  doc.setFontSize(10);
-  const unidades = compras.reduce((s, c) => s + Compras.unidadesDe(c), 0);
-  const transporte = compras.reduce((s, c) => s + (Number(c.transporte) || 0), 0);
-  doc.text(`Total comprado: ${formatoLempiras(total)}`, margenIzq, y); y += 5;
-  if (transporte > 0) { doc.text(`  de eso, transporte: ${formatoLempiras(transporte)} (ya incluido en el costo de las plantas)`, margenIzq, y); y += 5; }
-  doc.text(`Número de compras: ${compras.length}`, margenIzq, y); y += 5;
-  doc.text(`Unidades compradas: ${unidades}`, margenIzq, y); y += 10;
-
-  if (compras.length === 0) {
-    doc.text('No hay compras en este período.', margenIzq, y);
-    y += 6;
-  }
-
-  if (compras.length) {
-  // Por producto: cada línea de cada factura, con su parte del transporte
-  const agrupar = (registros, clave, cantidad, valor) => {
-    const g = {};
-    registros.forEach((r) => {
-      const k = clave(r) || 'Sin proveedor';
-      if (!g[k]) g[k] = { cantidad: 0, total: 0 };
-      g[k].cantidad += cantidad(r);
-      g[k].total += valor(r);
-    });
-    return Object.entries(g).map(([nombre, d]) => ({ nombre, ...d })).sort((a, b) => b.total - a.total);
-  };
-  const todasLasLineas = compras.flatMap((c) => Compras.lineasDe(c));
-
-  const tabla = (titulo, filas, encabezado) => {
-    nuevaPagina(255);
-    doc.setFontSize(12);
-    doc.text(titulo, margenIzq, y); y += 6;
-    doc.setFontSize(9);
-    doc.text(encabezado, margenIzq, y); doc.text('Cant.', 130, y); doc.text('Total', 160, y);
-    y += 4; doc.line(margenIzq, y, 196, y); y += 4;
-    filas.forEach((f) => {
-      nuevaPagina(280);
-      doc.text(String(f.nombre).substring(0, 55), margenIzq, y);
-      doc.text(String(f.cantidad), 130, y);
-      doc.text(formatoLempiras(f.total), 160, y);
-      y += 5;
-    });
-    y += 8;
-  };
-  tabla('Por producto (costo con transporte)', agrupar(todasLasLineas, (l) => l.nombreProducto, (l) => Number(l.cantidad) || 0,
-    (l) => (Number(l.subtotal) || 0) + (Number(l.transporte) || 0)), 'Producto');
-  tabla('Por proveedor', agrupar(compras, (c) => c.nombreProveedor, (c) => Compras.unidadesDe(c), (c) => Number(c.total) || 0), 'Proveedor');
-
-  nuevaPagina(255);
-  doc.setFontSize(12);
-  doc.text('Detalle de compras', margenIzq, y); y += 6;
-  doc.setFontSize(9);
-  doc.text('Fecha', margenIzq, y); doc.text('Producto', 38, y); doc.text('Proveedor', 95, y);
-  doc.text('Cant.', 140, y); doc.text('C/u', 155, y); doc.text('Total', 177, y);
-  y += 4; doc.line(margenIzq, y, 196, y); y += 4;
-  compras.slice().reverse().forEach((c) => {
-    const lineas = Compras.lineasDe(c);
-    lineas.forEach((l, i) => {
-      nuevaPagina(280);
-      if (i === 0) {
-        doc.text(new Date(c.fecha).toLocaleDateString(), margenIzq, y);
-        doc.text(((c.nombreProveedor || '-') + (c.numeroFactura ? ' #' + c.numeroFactura : '')).substring(0, 24), 95, y);
-      }
-      doc.text((l.nombreProducto || '').substring(0, 28), 38, y);
-      doc.text(String(l.cantidad), 140, y);
-      doc.text((Number(l.costoUnitario) || 0).toFixed(2), 155, y);
-      doc.text((Number(l.subtotal) || 0).toFixed(2), 177, y);
-      y += 5;
-    });
-    if (Number(c.transporte) > 0) {
-      nuevaPagina(280);
-      doc.text('Transporte', 38, y); doc.text((Number(c.transporte) || 0).toFixed(2), 177, y); y += 5;
-      // Cuánto se le sumó a cada planta por el transporte (por unidad)
-      nuevaPagina(280);
-      doc.text('Transporte sumado a cada planta (por unidad):', 38, y); y += 5;
-      lineas.forEach((l) => {
-        nuevaPagina(280);
-        const inc = Math.max(0, (Number(l.costoFinalUnit) || 0) - (Number(l.costoUnitario) || 0));
-        doc.text(`${(l.nombreProducto || '').substring(0, 30)}: ${(Number(l.costoUnitario) || 0).toFixed(2)} + ${inc.toFixed(2)} = ${(Number(l.costoFinalUnit) || 0).toFixed(2)}`, 42, y);
-        y += 5;
-      });
-    }
-    if (c.lineas) {
-      nuevaPagina(280);
-      doc.text('Total factura', 38, y); doc.text((Number(c.total) || 0).toFixed(2), 177, y); y += 3;
-      doc.line(38, y, 196, y); y += 4;
-    }
-  });
-
-  }
-
-  // Compras anuladas del período, con su motivo (historial)
-  const anuladas = (await Compras.listarCompras({ desde, hasta, incluirAnuladas: true })).filter((c) => c.anulada);
-  if (anuladas.length) {
-    y += 8;
-    nuevaPagina(260);
-    doc.setFontSize(12);
-    doc.text(`Compras anuladas (${anuladas.length}) - no cuentan en los totales`, margenIzq, y);
-    y += 6;
-    doc.setFontSize(9);
-    anuladas.forEach((c) => {
-      nuevaPagina(275);
-      const prods = Compras.lineasDe(c).map((l) => `${l.nombreProducto} x${l.cantidad}`).join(', ');
-      doc.text(`${new Date(c.fecha).toLocaleDateString()}  ${(c.nombreProveedor || '-').substring(0, 20)}  ${formatoLempiras(c.total)}  ${prods.substring(0, 60)}`, margenIzq, y);
-      y += 4;
-      const motivo = `Motivo: ${(c.motivoAnulacion || 'sin motivo registrado').replace(/[^\x20-\xFF]/g, '').trim()}${c.notaAnulacion ? ' - ' + c.notaAnulacion : ''}`;
-      doc.splitTextToSize(motivo, 175).forEach((linea) => { nuevaPagina(280); doc.text(linea, margenIzq + 4, y); y += 4; });
-      y += 2;
-    });
-  }
-
-  const nombreArchivo = `encantos-compras-${(desde || new Date().toISOString()).slice(0, 7)}.pdf`;
   return { doc, nombreArchivo };
 }
 
@@ -312,29 +105,21 @@ async function construirPDFClientes() {
 
   doc.setFontSize(10);
   doc.text(`Total de clientes registrados: ${clientes.length}`, margenIzq, y);
-  y += 6;
-  // Cuántos clientes hay en cada municipio
-  const porLugar = {};
-  clientes.forEach((c) => { const k = Clientes.claveLugar(c) || 'Sin ubicacion'; porLugar[k] = (porLugar[k] || 0) + 1; });
-  const resumenLugares = Object.entries(porLugar).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}: ${n}`).join('  |  ');
-  doc.splitTextToSize('Por municipio: ' + resumenLugares, 182).forEach((linea) => { doc.text(linea, margenIzq, y); y += 5; });
-  y += 5;
+  y += 10;
 
   doc.setFontSize(9);
   doc.text('Nombre', margenIzq, y);
-  doc.text('Celular', 78, y);
-  doc.text('De donde es', 106, y);
-  doc.text('Desde', 176, y);
+  doc.text('Celular', 100, y);
+  doc.text('Cliente desde', 145, y);
   y += 4;
   doc.line(margenIzq, y, 196, y);
   y += 4;
 
   clientes.forEach((c) => {
     if (y > 280) { doc.addPage(); y = 18; }
-    doc.text((c.nombre || '').substring(0, 32), margenIzq, y);
-    doc.text(c.celular || '-', 78, y);
-    doc.text((Clientes.ubicacionTexto(c) || '-').substring(0, 42), 106, y);
-    doc.text(c.creadoEl ? new Date(c.creadoEl).toLocaleDateString() : '-', 176, y);
+    doc.text((c.nombre || '').substring(0, 38), margenIzq, y);
+    doc.text(c.celular || '-', 100, y);
+    doc.text(c.creadoEl ? new Date(c.creadoEl).toLocaleDateString() : '-', 145, y);
     y += 6;
     if (c.notas) {
       doc.setFontSize(8);
@@ -380,6 +165,88 @@ async function construirPDFProveedores() {
   });
 
   const nombreArchivo = `encantos-proveedores-${new Date().toISOString().slice(0, 10)}.pdf`;
+  return { doc, nombreArchivo };
+}
+
+// ---------------------------------------------------------
+// Reporte de PEDIDOS PENDIENTES (agrupados por proveedor)
+// ---------------------------------------------------------
+async function construirPDFPedidos() {
+  const doc = nuevoDocPDF('Pedidos pendientes');
+  const margenIzq = 14;
+  let y = 32;
+
+  const [pedidos, proveedores] = await Promise.all([
+    Pedidos.listarPedidos(),
+    Proveedores.listarProveedores(),
+  ]);
+  const activos = pedidos.filter(Pedidos.esPedidoActivo);
+  const mapaProv = new Map(proveedores.map((p) => [p.id, p]));
+
+  const totalPedidos = activos.reduce((s, p) => s + Pedidos.totalPedido(p), 0);
+  const totalAdelantos = activos.reduce((s, p) => s + (p.adelanto || 0), 0);
+  const totalSaldo = activos.reduce((s, p) => s + Pedidos.saldoPedido(p), 0);
+
+  doc.setFontSize(10);
+  doc.text(`Pedidos activos: ${activos.length}`, margenIzq, y); y += 5;
+  doc.text(`Total de los pedidos: ${formatoLempiras(totalPedidos)}`, margenIzq, y); y += 5;
+  doc.text(`Adelantos recibidos: ${formatoLempiras(totalAdelantos)}`, margenIzq, y); y += 5;
+  doc.text(`Saldo por cobrar: ${formatoLempiras(totalSaldo)}`, margenIzq, y); y += 10;
+
+  if (activos.length === 0) {
+    doc.text('No hay pedidos pendientes.', margenIzq, y);
+  }
+
+  // Agrupar por proveedor (los que no tienen proveedor van al final)
+  const grupos = new Map();
+  activos.forEach((p) => {
+    const clave = p.proveedorId && mapaProv.has(p.proveedorId) ? p.proveedorId : '__sin__';
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(p);
+  });
+  const claves = [...grupos.keys()].sort((a, b) => (a === '__sin__') - (b === '__sin__'));
+
+  claves.forEach((clave) => {
+    const lista = grupos.get(clave);
+    const prov = mapaProv.get(clave);
+    if (y > 250) { doc.addPage(); y = 18; }
+
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(prov ? prov.nombre + (prov.empresa ? ' - ' + prov.empresa : '') : 'Sin proveedor asignado', margenIzq, y);
+    doc.setFont(undefined, 'normal');
+    y += 5;
+    if (prov && (prov.telefono || prov.direccion)) {
+      doc.setFontSize(9);
+      doc.text([prov.telefono ? 'Cel: ' + prov.telefono : '', prov.direccion || ''].filter(Boolean).join('  |  ').substring(0, 100), margenIzq, y);
+      y += 5;
+    }
+
+    doc.setFontSize(9);
+    doc.text('Planta', margenIzq, y);
+    doc.text('Cant.', 78, y);
+    doc.text('Cliente', 92, y);
+    doc.text('Estado', 135, y);
+    doc.text('Total', 163, y);
+    doc.text('Saldo', 183, y);
+    y += 3;
+    doc.line(margenIzq, y, 196, y);
+    y += 4;
+
+    lista.forEach((p) => {
+      if (y > 280) { doc.addPage(); y = 18; }
+      doc.text((p.nombreProducto || '').substring(0, 30), margenIzq, y);
+      doc.text(String(p.cantidad), 78, y);
+      doc.text((p.nombreCliente || '').substring(0, 22), 92, y);
+      doc.text((p.estado || '').substring(0, 17), 135, y);
+      doc.text(formatoLempiras(Pedidos.totalPedido(p)), 163, y);
+      doc.text(formatoLempiras(Pedidos.saldoPedido(p)), 183, y);
+      y += 5;
+    });
+    y += 7;
+  });
+
+  const nombreArchivo = `encantos-pedidos-${new Date().toISOString().slice(0, 10)}.pdf`;
   return { doc, nombreArchivo };
 }
 
@@ -504,14 +371,14 @@ async function compartirPDF(constructor, opciones = {}) {
 async function generarReporteVentasPDF(opciones) { return descargarPDF(construirPDFVentas, opciones); }
 async function compartirReporteVentasPDF(opciones) { return compartirPDF(construirPDFVentas, opciones); }
 
-async function generarReporteComprasPDF(opciones) { return descargarPDF(construirPDFCompras, opciones); }
-async function compartirReporteComprasPDF(opciones) { return compartirPDF(construirPDFCompras, opciones); }
-
 async function generarReporteClientesPDF() { return descargarPDF(construirPDFClientes); }
 async function compartirReporteClientesPDF() { return compartirPDF(construirPDFClientes); }
 
 async function generarReporteInventarioPDF() { return descargarPDF(construirPDFInventario); }
 async function compartirReporteInventarioPDF() { return compartirPDF(construirPDFInventario); }
+
+async function generarReportePedidosPDF() { return descargarPDF(construirPDFPedidos); }
+async function compartirReportePedidosPDF() { return compartirPDF(construirPDFPedidos); }
 
 async function generarReporteProveedoresPDF() { return descargarPDF(construirPDFProveedores); }
 async function compartirReporteProveedoresPDF() { return compartirPDF(construirPDFProveedores); }
@@ -519,12 +386,12 @@ async function compartirReporteProveedoresPDF() { return compartirPDF(construirP
 window.Reportes = {
   generarReporteVentasPDF,
   compartirReporteVentasPDF,
-  generarReporteComprasPDF,
-  compartirReporteComprasPDF,
   generarReporteClientesPDF,
   compartirReporteClientesPDF,
   generarReporteInventarioPDF,
   compartirReporteInventarioPDF,
   generarReporteProveedoresPDF,
   compartirReporteProveedoresPDF,
+  generarReportePedidosPDF,
+  compartirReportePedidosPDF,
 };
