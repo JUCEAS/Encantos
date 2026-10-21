@@ -1,54 +1,187 @@
-// catalogo.js — Catálogo de encargos: plantas que NO están en stock pero que
-// los clientes pueden pedir para que las traigamos. Lo que se guarda aquí es
-// lo que verá el público en catalogo.html, así que nunca incluye costos.
+// catalogo.js — Mantiene la colección pública "catalogo_publico" al día.
+//
+// Solo se copian los datos que un cliente puede ver: foto, nombre, precio,
+// luz, riego, descripción, etc. NUNCA se copian el costo, la ganancia, el
+// proveedor, el stock exacto ni datos de clientes.
 
-async function guardarItemCatalogo(datos) {
-  const item = {
-    nombre: datos.nombre.trim(),
-    categoria: datos.categoria || '',
-    descripcion: (datos.descripcion || '').trim(),
-    tipoSol: datos.tipoSol || '',
-    riego: datos.riego || '',
-    precio: parseFloat(datos.precio) || 0,
-    tiempoEntrega: (datos.tiempoEntrega || '').trim(),
-    proveedorId: datos.proveedorId || null,
-    visible: datos.visible !== false,
-    foto: datos.foto || null,
-    // Al editar se conserva la fecha original de alta.
-    creadoEl: datos.creadoEl || new Date().toISOString(),
-  };
-  if (datos.id) {
-    item.id = datos.id;
-    return DB.actualizar(DB.STORES.catalogo, item);
+const UMBRAL_ULTIMAS_UNIDADES = 2;
+
+// Documento especial dentro de catalogo_publico con los datos del negocio que
+// ve el cliente (número de WhatsApp, mensaje de bienvenida, ubicación).
+// Los ids que empiezan con "_" no son plantas.
+const CONFIG_ID = '_config';
+
+// Los correos de las vendedoras NO van en el documento público (lo puede leer
+// cualquiera). Se guardan aparte, en ajustes/vendedoras, que solo ve el equipo.
+const PRIVADO_VENDEDORAS = 'vendedoras';
+
+async function obtenerConfig() {
+  const [publico, privado] = await Promise.all([
+    DB.obtener(DB.STORES.catalogo, CONFIG_ID),
+    DB.obtener(DB.STORES.ajustes, PRIVADO_VENDEDORAS).catch(() => null),
+  ]);
+  const config = publico || {};
+  const correos = (privado && privado.correos) || {};
+  const vendedores = (config.vendedores || []).map((v) => ({ ...v, correo: correos[v.id] || v.correo || '' }));
+  const resultado = { ...config, vendedores };
+  // Migración: si quedaron correos en el documento público, se mueven al privado
+  if ((config.vendedores || []).some((v) => v.correo)) {
+    guardarConfig(resultado).catch((e) => console.warn('No se pudo mover correos a privado', e));
   }
-  return DB.agregar(DB.STORES.catalogo, item);
+  return resultado;
 }
 
-async function listarCatalogo() {
-  const items = await DB.obtenerTodos(DB.STORES.catalogo);
-  items.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-  return items;
+async function guardarConfig(datos) {
+  const vendedores = (datos.vendedores || []).map((v) => ({
+    id: v.id,
+    nombre: (v.nombre || '').trim(),
+    whatsapp: (v.whatsapp || '').replace(/[^0-9]/g, ''),
+    correo: (v.correo || '').trim().toLowerCase(),
+  })).filter((v) => v.id && v.nombre);
+  const correos = {};
+  vendedores.forEach((v) => { if (v.correo) correos[v.id] = v.correo; });
+  await DB.actualizar(DB.STORES.ajustes, { id: PRIVADO_VENDEDORAS, correos });
+  return DB.actualizar(DB.STORES.catalogo, {
+    id: CONFIG_ID,
+    tipo: 'config',
+    negocio: (datos.negocio || 'Encantos').trim(),
+    whatsapp: (datos.whatsapp || '').replace(/[^0-9]/g, ''),
+    bienvenida: (datos.bienvenida || '').trim(),
+    ubicacion: (datos.ubicacion || '').trim(),
+    // Público: solo nombre y WhatsApp (el correo queda en ajustes/vendedoras)
+    vendedores: vendedores.map(({ id, nombre, whatsapp }) => ({ id, nombre, whatsapp })),
+    actualizadoEl: new Date().toISOString(),
+  });
 }
 
-async function buscarEnCatalogo(texto) {
-  const items = await listarCatalogo();
-  const q = texto.trim().toLowerCase();
-  if (!q) return items;
-  return items.filter(
-    (i) =>
-      (i.nombre || '').toLowerCase().includes(q) ||
-      (i.descripcion || '').toLowerCase().includes(q) ||
-      (i.categoria || '').toLowerCase().includes(q)
-  );
+function disponibilidadDe(stock) {
+  const n = Number(stock) || 0;
+  if (n <= 0) return 'agotado';
+  if (n <= UMBRAL_ULTIMAS_UNIDADES) return 'ultimas';
+  return 'disponible';
 }
 
-async function eliminarItemCatalogo(id) {
-  return DB.eliminar(DB.STORES.catalogo, id);
+// Construye la ficha pública de un producto, o null si no debe publicarse.
+function fichaPublica(p) {
+  if (!p || !p.publicarCatalogo) return null;
+  const cat = Inventario.infoCategoria(p.categoria);
+  return {
+    nombre: p.nombre || '',
+    nombreCientifico: p.nombreCientifico || '',
+    categoria: cat.nombre,
+    categoriaId: cat.id,
+    grupo: cat.grupo,
+    descripcion: p.descripcion || '',
+    tipoSol: p.tipoSol || '',
+    riego: p.riego || '',
+    ubicacion: p.ubicacion || '',
+    dificultad: p.dificultad || '',
+    mascotas: p.mascotas || '',
+    tamanoMaceta: p.tamanoMaceta || '',
+    tamanoAdulto: p.tamanoAdulto || '',
+    etiquetas: Array.isArray(p.etiquetas) ? p.etiquetas : [],
+    precio: Number(p.precio) || 0,
+    foto: p.foto || null,
+    disponibilidad: disponibilidadDe(p.stock),
+  };
+}
+
+function mismaFicha(a, b) {
+  if (!a || !b) return false;
+  const { actualizadoEl: _x, id: _i, ...ra } = a;
+  const { actualizadoEl: _y, id: _j, ...rb } = b;
+  return JSON.stringify(ra, Object.keys(ra).sort()) === JSON.stringify(rb, Object.keys(rb).sort());
+}
+
+async function sincronizarProducto(producto) {
+  const ficha = fichaPublica(producto);
+  if (!ficha) return retirarProducto(producto.id);
+  return DB.actualizar(DB.STORES.catalogo, {
+    id: producto.id,
+    ...ficha,
+    actualizadoEl: new Date().toISOString(),
+  });
+}
+
+async function retirarProducto(id) {
+  if (!id) return;
+  const existente = await DB.obtener(DB.STORES.catalogo, id);
+  if (existente) await DB.eliminar(DB.STORES.catalogo, id);
+}
+
+async function actualizarDisponibilidad(id) {
+  const producto = await DB.obtener(DB.STORES.productos, id);
+  if (producto) return sincronizarProducto(producto);
+  return retirarProducto(id);
+}
+
+// Revisión completa: publica lo que falta, corrige lo que cambió y retira lo
+// que ya no debe estar. Se ejecuta al abrir la app y después de importar un
+// respaldo, así el catálogo nunca queda desactualizado.
+async function sincronizarTodo() {
+  const [productos, publicados] = await Promise.all([
+    DB.obtenerTodos(DB.STORES.productos),
+    DB.obtenerTodos(DB.STORES.catalogo),
+  ]);
+  const mapaPublicados = new Map(publicados.filter((d) => !String(d.id).startsWith('_')).map((d) => [d.id, d]));
+  const tareas = [];
+  let cambios = 0;
+
+  // Recuperación: la versión de la app subida el 17/10 guardaba los productos
+  // sin "publicar en catálogo" ni los datos de cuidados. Si un producto quedó
+  // así pero su ficha pública sigue existiendo, se le devuelven esos datos
+  // desde la ficha (en vez de retirarlo del catálogo).
+  const CAMPOS_FICHA = ['nombreCientifico', 'ubicacion', 'dificultad', 'mascotas', 'tamanoMaceta', 'tamanoAdulto', 'etiquetas'];
+  productos.forEach((p) => {
+    const copia = mapaPublicados.get(p.id);
+    if (!copia || p.publicarCatalogo !== undefined) return;
+    const recuperado = { publicarCatalogo: true };
+    CAMPOS_FICHA.forEach((k) => {
+      const vacio = p[k] === undefined || p[k] === '' || (Array.isArray(p[k]) && !p[k].length);
+      if (vacio && copia[k] !== undefined) recuperado[k] = copia[k];
+    });
+    Object.assign(p, recuperado);
+    tareas.push(DB.actualizarCampos(DB.STORES.productos, p.id, recuperado).catch((e) => console.warn('No se pudo recuperar', p.id, e)));
+    cambios++;
+  });
+
+  productos.forEach((p) => {
+    const ficha = fichaPublica(p);
+    const actual = mapaPublicados.get(p.id);
+    mapaPublicados.delete(p.id);
+    if (ficha && !mismaFicha(ficha, actual)) {
+      cambios++;
+      tareas.push(DB.actualizar(DB.STORES.catalogo, { id: p.id, ...ficha, actualizadoEl: new Date().toISOString() }));
+    } else if (!ficha && actual) {
+      cambios++;
+      tareas.push(DB.eliminar(DB.STORES.catalogo, p.id));
+    }
+  });
+  // Fichas cuyo producto ya no existe
+  mapaPublicados.forEach((_d, id) => {
+    cambios++;
+    tareas.push(DB.eliminar(DB.STORES.catalogo, id));
+  });
+
+  await Promise.all(tareas);
+  return cambios;
+}
+
+// Identificador corto para el enlace (#v=saira). Solo letras y números.
+function idVendedor(nombre, existentes = []) {
+  const base = (nombre || 'vendedora').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 16) || 'vendedora';
+  let id = base, n = 2;
+  while (existentes.includes(id)) id = base + n++;
+  return id;
 }
 
 window.Catalogo = {
-  guardarItemCatalogo,
-  listarCatalogo,
-  buscarEnCatalogo,
-  eliminarItemCatalogo,
+  idVendedor,
+  obtenerConfig,
+  guardarConfig,
+  sincronizarProducto,
+  retirarProducto,
+  actualizarDisponibilidad,
+  sincronizarTodo,
 };

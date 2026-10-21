@@ -1,211 +1,466 @@
 // catalogo-publico.js — Página que ven los clientes (catalogo.html).
-//
-// No inicia sesión: solo lee dos cosas públicas de Firestore, el catálogo
-// visible y los datos del negocio. Todo lo demás (clientes, costos, ventas,
-// pedidos) está protegido por las reglas y esta página nunca lo toca.
-// Los pedidos no se guardan aquí: el botón abre WhatsApp con el mensaje listo.
+// Solo LEE la colección "catalogo_publico"; las reglas de Firestore no permiten
+// que un visitante escriba ni vea inventario, costos, ventas o clientes.
 
-(function () {
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
+firebase.initializeApp({
+  apiKey: 'AIzaSyArwo4lDPBxUNk-eafoqedY0Ylp6FodOu0',
+  authDomain: 'encantos-vivero.firebaseapp.com',
+  projectId: 'encantos-vivero',
+  storageBucket: 'encantos-vivero.firebasestorage.app',
+  messagingSenderId: '892959442776',
+  appId: '1:892959442776:web:e51c8af2b425f7f11fc72d',
+});
+const db = firebase.firestore();
 
-  const estado = { items: [], negocio: {} };
+// Mismo orden y emojis que en la app interna (js/inventario.js)
+const CATEGORIAS = [
+  ['interior', '🪴'], ['flor', '🌸'], ['cactus', '🌵'], ['suculentas', '🪷'],
+  ['orquideas', '🌺'], ['bromelias', '🍍'], ['helechos', '🌿'], ['arbustos', '🌳'],
+  ['palmas', '🌴'], ['arboles', '🌲'], ['enredaderas', '🍃'], ['cubresuelos', '🌱'],
+  ['aromaticas', '🌿'], ['acuaticas', '💧'], ['bonsai', '🎍'],
+  ['piedra-pomez', '🪨'], ['abono', '🧪'], ['tierra', '🟫'], ['macetas', '🏺'], ['otros', '🧰'],
+];
+const ORDEN_CAT = new Map(CATEGORIAS.map(([id], i) => [id, i]));
+const EMOJI_CAT = new Map(CATEGORIAS);
+const LUCES = [
+  ['Sol completo', '☀️ Sol'],
+  ['Medio sol', '⛅ Medio sol'],
+  ['Sombra', '🌥️ Sombra / interior'],
+];
+const ICONO_LUZ = { 'Sol completo': '☀️', 'Medio sol': '⛅', 'Sombra': '🌥️' };
+const ORDEN_DISP = { disponible: 0, ultimas: 1, agotado: 2 };
 
-  const $ = (id) => document.getElementById(id);
+let plantas = [];
+let config = {};
+let encargos = [];   // plantas por encargo (colección "catalogo", solo las visibles)
+let negocio = {};    // datos de la cuenta para el adelanto (configuracion/negocio)
+let vendedora = null; // quién compartió el enlace (recibe los pedidos)
+// Se lee al abrir, antes de que la página reescriba la dirección
+const HASH_INICIAL = new URLSearchParams(location.hash.slice(1));
+const estado = leerEstadoUrl();
+let pedido = cargarPedido();
 
-  // Crea elementos con textContent (nada de innerHTML con datos de la base).
-  function h(etiqueta, propiedades, ...hijos) {
-    const nodo = document.createElement(etiqueta);
-    Object.entries(propiedades || {}).forEach(([clave, valor]) => {
-      if (clave === 'class') nodo.className = valor;
-      else if (clave === 'text') nodo.textContent = valor;
-      else nodo.setAttribute(clave, valor);
-    });
-    hijos.flat().forEach((hijo) => {
-      if (hijo) nodo.appendChild(typeof hijo === 'string' ? document.createTextNode(hijo) : hijo);
-    });
-    return nodo;
+// ---------- Utilidades ----------
+function esc(t) {
+  return String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function lempiras(n) {
+  return 'L ' + (Number(n) || 0).toLocaleString('es-HN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+function sinAcentos(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+function avisar(texto) {
+  const el = document.getElementById('avisoFlotante');
+  el.textContent = texto;
+  el.hidden = false;
+  clearTimeout(avisar._t);
+  avisar._t = setTimeout(() => { el.hidden = true; }, 2200);
+}
+// Firma del enlace: #v=saira (o ?v=saira). Se recuerda en este teléfono para
+// que, si el cliente vuelve otro día, su pedido llegue a la misma vendedora.
+function leerFirmaVendedora() {
+  const h = HASH_INICIAL;
+  const q = new URLSearchParams(location.search);
+  let id = h.get('v') || q.get('v') || '';
+  try {
+    if (id) localStorage.setItem('encantos-vendedora', id);
+    else id = localStorage.getItem('encantos-vendedora') || '';
+  } catch { /* sin almacenamiento */ }
+  return id;
+}
+
+function saludo() {
+  return 'Hola ' + (vendedora ? vendedora.nombre : (config.negocio || 'Encantos'));
+}
+
+function numeroWhatsApp() {
+  let n = String((vendedora && vendedora.whatsapp) || config.whatsapp || negocio.whatsapp || '').replace(/[^0-9]/g, '');
+  if (n.length === 8) n = '504' + n; // número hondureño sin código de país
+  return n;
+}
+function enlaceWhatsApp(mensaje) {
+  const n = numeroWhatsApp();
+  return (n ? `https://wa.me/${n}` : 'https://wa.me/') + '?text=' + encodeURIComponent(mensaje);
+}
+
+// ---------- Estado en la URL (para compartir enlaces filtrados) ----------
+function leerEstadoUrl() {
+  const u = new URLSearchParams(location.search);
+  return { cat: u.get('cat') || '', luz: u.get('luz') || '', q: u.get('q') || '' };
+}
+function guardarEstadoUrl() {
+  const u = new URLSearchParams();
+  if (estado.cat) u.set('cat', estado.cat);
+  if (estado.luz) u.set('luz', estado.luz);
+  if (estado.q) u.set('q', estado.q);
+  const qs = u.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+
+// ---------- Carga ----------
+async function cargarEncargos() {
+  // Cada parte se carga por separado: si una falla, la otra igual se muestra.
+  const [negocioDoc, encSnap] = await Promise.all([
+    db.collection('configuracion').doc('negocio').get().catch(() => null),
+    // El filtro visible==true es obligatorio: las reglas solo dejan leer lo visible.
+    db.collection('catalogo').where('visible', '==', true).get().catch((e) => { console.warn('Encargos no disponibles', e); return null; }),
+  ]);
+  negocio = negocioDoc && negocioDoc.exists ? negocioDoc.data() : {};
+  encargos = encSnap ? encSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es')) : [];
+  dibujarEncargos();
+  if (HASH_INICIAL.has('encargos') && encargos.length) {
+    setTimeout(() => document.getElementById('encargos').scrollIntoView({ behavior: 'smooth' }), 300);
   }
+}
 
-  function dinero(valor) {
-    return 'L. ' + (Number(valor) || 0).toFixed(2);
-  }
-
-  // Deja solo los dígitos; si son 8 (número hondureño), agrega el 504.
-  function numeroWhatsapp(crudo) {
-    const digitos = String(crudo || '').replace(/\D/g, '');
-    if (!digitos) return '';
-    return digitos.length === 8 ? '504' + digitos : digitos;
-  }
-
-  function enlaceWhatsapp(item, cantidad) {
-    const numero = numeroWhatsapp(estado.negocio.whatsapp);
-    if (!numero) return '';
-    const precio = item.precio ? ` (${dinero(item.precio)} c/u)` : '';
-    const mensaje =
-      `Hola, me gustaría encargar: ${cantidad} x ${item.nombre}${precio}. ` +
-      '¿Cuándo podrían tenerla disponible?';
-    return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
-  }
-
-  function crearTarjeta(item) {
-    let cantidad = 1;
-
-    const foto = item.foto
-      ? h('img', { class: 'foto', src: item.foto, alt: item.nombre, loading: 'lazy' })
-      : h('div', { class: 'sin-foto', text: '🌿' });
-
-    const cuidados = [item.tipoSol ? '☀️ ' + item.tipoSol : '', item.riego ? '💧 ' + item.riego : '']
-      .filter(Boolean)
-      .join('  ·  ');
-
-    const etiquetaCantidad = h('span', { text: '1' });
-    const menos = h('button', { type: 'button', 'aria-label': 'Menos', text: '−' });
-    const mas = h('button', { type: 'button', 'aria-label': 'Más', text: '+' });
-
-    const enlace = enlaceWhatsapp(item, 1);
-    const boton = enlace
-      ? h('a', { class: 'btn-whatsapp', href: enlace, target: '_blank', rel: 'noopener', text: 'Encargar por WhatsApp' })
-      : null;
-
-    function actualizar() {
-      etiquetaCantidad.textContent = String(cantidad);
-      if (boton) boton.setAttribute('href', enlaceWhatsapp(item, cantidad));
-    }
-    menos.addEventListener('click', () => { if (cantidad > 1) { cantidad -= 1; actualizar(); } });
-    mas.addEventListener('click', () => { if (cantidad < 99) { cantidad += 1; actualizar(); } });
-
-    return h('article', { class: 'tarjeta' },
-      foto,
-      h('div', { class: 'cuerpo' },
-        item.categoria ? h('span', { class: 'chip', text: item.categoria }) : null,
-        h('h3', { text: item.nombre }),
-        item.descripcion ? h('p', { class: 'descripcion', text: item.descripcion }) : null,
-        cuidados ? h('p', { class: 'cuidados', text: cuidados }) : null,
-        item.tiempoEntrega ? h('p', { class: 'entrega', text: '⏱ Entrega: ' + item.tiempoEntrega }) : null,
-        h('p', { class: 'precio', text: item.precio ? dinero(item.precio) : 'Consultar precio' }),
-        boton
-          ? h('div', { class: 'pedir' }, h('div', { class: 'cantidad' }, menos, etiquetaCantidad, mas), boton)
-          : null
-      )
-    );
-  }
-
-  function pintarCatalogo() {
-    const texto = $('buscar').value.trim().toLowerCase();
-    const categoria = $('categoria').value;
-
-    const visibles = estado.items.filter((i) => {
-      if (categoria && i.categoria !== categoria) return false;
-      if (!texto) return true;
-      return (
-        (i.nombre || '').toLowerCase().includes(texto) ||
-        (i.descripcion || '').toLowerCase().includes(texto)
-      );
-    });
-
-    const rejilla = $('rejilla');
-    rejilla.textContent = '';
-    visibles.forEach((i) => rejilla.appendChild(crearTarjeta(i)));
-
-    const mensaje = $('estado');
-    if (estado.items.length === 0) {
-      mensaje.textContent = 'Pronto agregaremos plantas al catálogo.';
-      mensaje.style.display = 'block';
-    } else if (visibles.length === 0) {
-      mensaje.textContent = 'No encontramos plantas con esa búsqueda.';
-      mensaje.style.display = 'block';
-    } else {
-      mensaje.style.display = 'none';
-    }
-  }
-
-  function pintarCuenta() {
-    const n = estado.negocio;
-    const bloque = $('bloqueCuenta');
-    const hayDatos = n.mostrarCuenta !== false && (n.banco || n.numeroCuenta);
-    if (!hayDatos) { bloque.style.display = 'none'; return; }
-
-    bloque.textContent = '';
-    bloque.appendChild(h('h2', { text: '¿Cómo apartar tu encargo?' }));
-    bloque.appendChild(h('p', {
-      text: n.mensajeAdelanto || 'Para confirmar tu encargo se puede dejar un adelanto por transferencia o depósito.',
-    }));
-
-    const datos = h('dl');
-    [
-      ['Banco', n.banco],
-      ['Tipo de cuenta', n.tipoCuenta],
-      ['Número de cuenta', n.numeroCuenta],
-      ['Titular', n.titularCuenta],
-    ].forEach(([etiqueta, valor]) => {
-      if (valor) { datos.appendChild(h('dt', { text: etiqueta })); datos.appendChild(h('dd', { text: valor })); }
-    });
-    bloque.appendChild(datos);
-
-    if (n.numeroCuenta) {
-      const copiar = h('button', { type: 'button', text: 'Copiar número de cuenta' });
-      copiar.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(n.numeroCuenta);
-          copiar.textContent = '¡Copiado!';
-        } catch (err) {
-          copiar.textContent = 'Mantén presionado el número para copiarlo';
-        }
-      });
-      bloque.appendChild(copiar);
-    }
-    bloque.style.display = 'block';
-  }
-
-  function llenarCategorias() {
-    const select = $('categoria');
-    const categorias = [...new Set(estado.items.map((i) => i.categoria).filter(Boolean))].sort();
-    select.textContent = '';
-    select.appendChild(h('option', { value: '', text: 'Todas' }));
-    categorias.forEach((c) => select.appendChild(h('option', { value: c, text: c })));
-    $('filtros').style.display = estado.items.length > 0 ? 'flex' : 'none';
-  }
-
-  function mostrarError() {
-    const mensaje = $('estado');
-    mensaje.style.display = 'block';
-    mensaje.textContent = 'No pudimos cargar el catálogo. Revisa tu conexión a internet.';
-    const reintentar = h('div', null, h('button', { type: 'button', text: 'Intentar de nuevo' }));
-    reintentar.firstChild.addEventListener('click', cargar);
-    mensaje.appendChild(reintentar);
-  }
-
-  async function cargar() {
-    $('estado').style.display = 'block';
-    $('estado').textContent = 'Cargando catálogo...';
-    try {
-      const [negocioDoc, catalogoSnap] = await Promise.all([
-        db.collection('configuracion').doc('negocio').get().catch(() => null),
-        // El filtro visible==true es obligatorio: las reglas solo dejan leer lo visible.
-        db.collection('catalogo').where('visible', '==', true).get(),
-      ]);
-
-      estado.negocio = negocioDoc && negocioDoc.exists ? negocioDoc.data() : {};
-      estado.items = catalogoSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-
-      if (estado.negocio.nombreNegocio) {
-        $('tituloNegocio').textContent = estado.negocio.nombreNegocio;
-        document.title = 'Catálogo — ' + estado.negocio.nombreNegocio;
+async function cargar() {
+  const promesaEncargos = cargarEncargos();
+  try {
+    const snap = await db.collection('catalogo_publico').get();
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      if (d.id.startsWith('_')) {
+        if (d.id === '_config') config = data;
+        return;
       }
-      llenarCategorias();
-      pintarCatalogo();
-      pintarCuenta();
-    } catch (err) {
-      console.error('Error cargando el catálogo', err);
-      mostrarError();
-    }
+      plantas.push({ id: d.id, ...data });
+    });
+    plantas.sort((a, b) =>
+      (ORDEN_DISP[a.disponibilidad] ?? 0) - (ORDEN_DISP[b.disponibilidad] ?? 0) ||
+      (a.etiquetas?.includes('Oferta') ? 0 : 1) - (b.etiquetas?.includes('Oferta') ? 0 : 1) ||
+      (a.nombre || '').localeCompare(b.nombre || '', 'es')
+    );
+    aplicarConfig();
+    pedido = pedido.filter((l) => plantas.some((p) => p.id === l.id && p.disponibilidad !== 'agotado'));
+    dibujarTodo();
+    const idFicha = HASH_INICIAL.get('p');
+    if (idFicha) abrirFicha(idFicha);
+  } catch (err) {
+    console.error(err);
+    await promesaEncargos.catch(() => {});
+    document.getElementById('estado').textContent = encargos.length
+      ? ''
+      : 'No se pudo cargar el catálogo. Revisa tu conexión a internet e inténtalo de nuevo.';
   }
+}
 
-  $('buscar').addEventListener('input', pintarCatalogo);
-  $('categoria').addEventListener('change', pintarCatalogo);
+function aplicarConfig() {
+  const idFirma = leerFirmaVendedora();
+  vendedora = (config.vendedores || []).find((v) => v.id === idFirma && v.whatsapp) || null;
+  if (vendedora) {
+    const b = document.getElementById('bienvenida');
+    b.insertAdjacentHTML('afterend', `<p class="ubicacion">💬 Te atiende <strong>${esc(vendedora.nombre)}</strong></p>`);
+  }
+  if (config.negocio) {
+    document.getElementById('nombreNegocio').textContent = config.negocio;
+  }
+  if (config.bienvenida) document.getElementById('bienvenida').textContent = config.bienvenida;
+  const ub = document.getElementById('ubicacion');
+  if (config.ubicacion) { ub.textContent = '📍 ' + config.ubicacion; ub.hidden = false; }
+}
 
-  cargar();
-})();
+// ---------- Dibujar ----------
+function plantasFiltradas({ ignorarCat = false, ignorarLuz = false } = {}) {
+  const q = sinAcentos(estado.q.trim());
+  return plantas.filter((p) =>
+    (ignorarCat || !estado.cat || p.categoriaId === estado.cat) &&
+    (ignorarLuz || !estado.luz || p.tipoSol === estado.luz) &&
+    (!q || sinAcentos([p.nombre, p.nombreCientifico, p.categoria, p.descripcion].join(' ')).includes(q))
+  );
+}
+
+function dibujarTodo() {
+  dibujarChips();
+  dibujarRejilla();
+  dibujarPedido();
+  const nombreCat = estado.cat ? (plantas.find((p) => p.categoriaId === estado.cat)?.categoria || '') : '';
+  document.getElementById('tituloSeccion').textContent = nombreCat || 'Catálogo de plantas';
+  document.title = (nombreCat ? nombreCat + ' · ' : 'Catálogo de plantas · ') + (config.negocio || 'Encantos');
+  guardarEstadoUrl();
+}
+
+function dibujarChips() {
+  const base = plantasFiltradas({ ignorarCat: true });
+  const cuentas = new Map();
+  base.forEach((p) => cuentas.set(p.categoriaId, (cuentas.get(p.categoriaId) || 0) + 1));
+  // Mostrar también la categoría activa aunque la búsqueda la deje en 0
+  if (estado.cat && !cuentas.has(estado.cat)) cuentas.set(estado.cat, 0);
+
+  const cats = [...cuentas.keys()].sort((a, b) => (ORDEN_CAT.get(a) ?? 99) - (ORDEN_CAT.get(b) ?? 99));
+  const nombreDe = (id) => plantas.find((p) => p.categoriaId === id)?.categoria || id;
+  const cont = document.getElementById('chipsCategorias');
+  cont.innerHTML =
+    `<button class="chip ${!estado.cat ? 'activo' : ''}" data-cat="">Todo <span class="cuenta">${base.length}</span></button>` +
+    cats.map((id) => `<button class="chip ${estado.cat === id ? 'activo' : ''}" data-cat="${esc(id)}">${EMOJI_CAT.get(id) || '🌿'} ${esc(nombreDe(id))} <span class="cuenta">${cuentas.get(id)}</span></button>`).join('');
+  cont.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => {
+    estado.cat = b.dataset.cat;
+    dibujarTodo();
+    window.scrollTo({ top: document.querySelector('.barra-filtros').offsetTop, behavior: 'smooth' });
+  }));
+  const activo = cont.querySelector('.activo');
+  if (activo) activo.scrollIntoView({ inline: 'center', block: 'nearest' });
+
+  // Luz: solo se muestra si hay plantas (no insumos) en la vista actual
+  const conLuz = plantasFiltradas({ ignorarLuz: true }).filter((p) => p.tipoSol);
+  const contLuz = document.getElementById('chipsLuz');
+  const luces = LUCES.filter(([v]) => conLuz.some((p) => p.tipoSol === v));
+  contLuz.hidden = luces.length < 2 && !estado.luz;
+  contLuz.innerHTML =
+    `<button class="chip ${!estado.luz ? 'activo' : ''}" data-luz="">Cualquier luz</button>` +
+    luces.map(([v, t]) => `<button class="chip ${estado.luz === v ? 'activo' : ''}" data-luz="${esc(v)}">${t}</button>`).join('');
+  contLuz.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => {
+    estado.luz = b.dataset.luz;
+    dibujarTodo();
+  }));
+}
+
+function insignia(p) {
+  if (p.disponibilidad === 'agotado') return '<span class="insignia agotado">Agotada</span>';
+  if (p.disponibilidad === 'ultimas') return '<span class="insignia ultimas">Últimas unidades</span>';
+  if (p.etiquetas?.includes('Oferta')) return '<span class="insignia oferta">Oferta</span>';
+  return '';
+}
+
+function dibujarRejilla() {
+  const lista = plantasFiltradas();
+  const est = document.getElementById('estado');
+  if (plantas.length === 0) est.textContent = 'Muy pronto publicaremos nuestras plantas aquí. 🌱';
+  else if (lista.length === 0) est.textContent = 'No encontramos plantas con ese filtro.';
+  else est.textContent = '';
+
+  document.getElementById('rejilla').innerHTML = lista.map((p) => `
+    <button class="tarjeta ${p.disponibilidad === 'agotado' ? 'agotada' : ''}" data-id="${esc(p.id)}">
+      ${p.foto ? `<img class="foto" src="${esc(p.foto)}" alt="${esc(p.nombre)}" loading="lazy">` : `<div class="sin-foto">${EMOJI_CAT.get(p.categoriaId) || '🌿'}</div>`}
+      <div class="cuerpo">
+        ${insignia(p)}
+        <h3>${esc(p.nombre)}</h3>
+        <div class="iconos">${[ICONO_LUZ[p.tipoSol], p.riego ? '💧' : '', p.mascotas === 'Segura para mascotas' ? '🐾' : ''].filter(Boolean).join(' ')}</div>
+        <div class="precio">${lempiras(p.precio)}</div>
+      </div>
+    </button>`).join('');
+  document.querySelectorAll('#rejilla .tarjeta').forEach((t) => t.addEventListener('click', () => abrirFicha(t.dataset.id)));
+  dibujarEncargos();
+}
+
+// ---------- Por encargo ----------
+function encargosFiltrados() {
+  const q = sinAcentos(estado.q.trim());
+  return encargos.filter((e) =>
+    (!estado.luz || e.tipoSol === estado.luz) &&
+    (!q || sinAcentos([e.nombre, e.categoria, e.descripcion].join(' ')).includes(q))
+  );
+}
+
+function dibujarEncargos() {
+  const seccion = document.getElementById('encargos');
+  const lista = encargosFiltrados();
+  seccion.hidden = lista.length === 0;
+  if (!lista.length) return;
+  document.getElementById('rejillaEncargos').innerHTML = lista.map((e) => `
+    <div class="tarjeta encargo" data-id="${esc(e.id)}">
+      ${e.foto ? `<img class="foto" src="${esc(e.foto)}" alt="${esc(e.nombre)}" loading="lazy">` : '<div class="sin-foto">🌿</div>'}
+      <div class="cuerpo">
+        <span class="insignia encargo">Por encargo</span>
+        <h3>${esc(e.nombre)}</h3>
+        ${e.descripcion ? `<p class="desc-encargo">${esc(e.descripcion)}</p>` : ''}
+        <div class="iconos">${[e.tipoSol ? (ICONO_LUZ[e.tipoSol] || '') + ' ' + esc(e.tipoSol) : '', e.riego ? '💧 ' + esc(e.riego) : ''].filter(Boolean).join(' · ')}</div>
+        ${e.tiempoEntrega ? `<div class="iconos">⏱ Entrega: ${esc(e.tiempoEntrega)}</div>` : ''}
+        <div class="precio">${e.precio ? lempiras(e.precio) : 'Consultar precio'}</div>
+        <div class="pedir-encargo">
+          <div class="cantidad"><button type="button" data-menos aria-label="Menos">−</button><span>1</span><button type="button" data-mas aria-label="Más">+</button></div>
+          <button type="button" class="btn-whatsapp chico" data-encargar>Encargar</button>
+        </div>
+      </div>
+    </div>`).join('');
+  document.querySelectorAll('#rejillaEncargos .tarjeta').forEach((t) => {
+    const item = encargos.find((x) => x.id === t.dataset.id);
+    const span = t.querySelector('.cantidad span');
+    let cantidad = 1;
+    t.querySelector('[data-menos]').addEventListener('click', () => { if (cantidad > 1) span.textContent = --cantidad; });
+    t.querySelector('[data-mas]').addEventListener('click', () => { if (cantidad < 99) span.textContent = ++cantidad; });
+    t.querySelector('[data-encargar]').addEventListener('click', () => {
+      const precio = item.precio ? ` (${lempiras(item.precio)} c/u)` : '';
+      const texto = `${saludo()} 🌿, me gustaría encargar: ${cantidad} × ${item.nombre}${precio}. ¿Cuándo podrían tenerla disponible?`;
+      window.open(enlaceWhatsApp(texto), '_blank', 'noopener');
+    });
+  });
+  pintarCuenta();
+}
+
+function pintarCuenta() {
+  const n = negocio;
+  const bloque = document.getElementById('bloqueCuenta');
+  if (n.mostrarCuenta === false || !(n.banco || n.numeroCuenta)) { bloque.hidden = true; return; }
+  const filas = [['Banco', n.banco], ['Tipo de cuenta', n.tipoCuenta], ['Número de cuenta', n.numeroCuenta], ['Titular', n.titularCuenta]]
+    .filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+  bloque.innerHTML = `<h3>¿Cómo apartar tu encargo?</h3>
+    <p>${esc(n.mensajeAdelanto || 'Para confirmar tu encargo se puede dejar un adelanto por transferencia o depósito.')}</p>
+    <dl>${filas}</dl>
+    ${n.numeroCuenta ? '<button type="button" class="btn-borde" id="btnCopiarCuenta">📋 Copiar número de cuenta</button>' : ''}`;
+  bloque.hidden = false;
+  const copiar = document.getElementById('btnCopiarCuenta');
+  if (copiar) copiar.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(n.numeroCuenta); avisar('Número de cuenta copiado'); }
+    catch { avisar('Mantén presionado el número para copiarlo'); }
+  });
+}
+
+// ---------- Ficha ----------
+function dato(etq, val, clase = '') {
+  return val ? `<div class="dato ${clase}"><div class="etq">${etq}</div><div class="val">${esc(val)}</div></div>` : '';
+}
+
+function textoRiego(r) {
+  if (!r) return '';
+  return /diario/i.test(r) ? r : r + ' (cuando la tierra esté seca)';
+}
+
+function abrirFicha(id) {
+  const p = plantas.find((x) => x.id === id);
+  if (!p) return;
+  const agotada = p.disponibilidad === 'agotado';
+  const disp = { disponible: 'Disponible', ultimas: 'Últimas unidades', agotado: 'Agotada' }[p.disponibilidad] || '';
+  document.getElementById('fichaContenido').innerHTML = `
+    ${p.foto ? `<img class="foto-grande" src="${esc(p.foto)}" alt="${esc(p.nombre)}">` : ''}
+    <h2 id="fichaNombre">${esc(p.nombre)}</h2>
+    ${p.nombreCientifico ? `<p class="cientifico">${esc(p.nombreCientifico)}</p>` : ''}
+    <div class="precio-grande">${lempiras(p.precio)}${p.tamanoMaceta ? ` <span style="font-size:14px;color:var(--gris);font-weight:500">· maceta ${esc(p.tamanoMaceta)}</span>` : ''}</div>
+    ${insignia(p)}
+    ${p.descripcion ? `<p class="descripcion">${esc(p.descripcion)}</p>` : ''}
+    <div class="datos">
+      ${dato('Luz', p.tipoSol ? (ICONO_LUZ[p.tipoSol] || '') + ' ' + p.tipoSol : '')}
+      ${dato('Riego', p.riego ? '💧 ' + textoRiego(p.riego) : '')}
+      ${dato('Ubicación', p.ubicacion)}
+      ${dato('Cuidado', p.dificultad)}
+      ${dato('Tamaño adulto', p.tamanoAdulto)}
+      ${dato('Mascotas', p.mascotas ? (p.mascotas === 'Segura para mascotas' ? '🐾 ' : '⚠️ ') + p.mascotas : '', p.mascotas === 'Tóxica para mascotas' ? 'aviso' : '')}
+      ${dato('Disponibilidad', disp, agotada ? 'aviso' : '')}
+      ${dato('Categoría', p.categoria)}
+    </div>
+    ${p.etiquetas?.length ? `<div class="etiquetas">${p.etiquetas.map((e) => `<span>${esc(e)}</span>`).join('')}</div>` : ''}
+    <div class="acciones">
+      ${agotada
+        ? `<a class="btn-whatsapp" target="_blank" rel="noopener" href="${esc(enlaceWhatsApp(`${saludo()} 🌿, ¿cuándo vuelven a tener *${p.nombre}*?`))}">Avísame cuando vuelva a haber</a>`
+        : `<button class="btn-principal" id="btnAgregar">🧺 Agregar a mi pedido</button>
+           <a class="btn-whatsapp" target="_blank" rel="noopener" href="${esc(enlaceWhatsApp(`${saludo()} 🌿, me interesa: *${p.nombre}* (${lempiras(p.precio)}). ¿Está disponible?`))}">Preguntar por WhatsApp</a>`}
+      <button class="btn-borde" id="btnCompartirPlanta">📤 Compartir esta planta</button>
+    </div>`;
+  const btnAgregar = document.getElementById('btnAgregar');
+  if (btnAgregar) btnAgregar.addEventListener('click', () => { agregarAlPedido(p); cerrarFicha(); });
+  document.getElementById('btnCompartirPlanta').addEventListener('click', () => {
+    const url = new URL('catalogo.html', location.href);
+    if (estado.cat) url.searchParams.set('cat', estado.cat);
+    url.hash = 'p=' + p.id + (vendedora ? '&v=' + vendedora.id : '');
+    compartir(`${p.nombre} · ${lempiras(p.precio)} 🌿`, url.toString());
+  });
+  document.getElementById('velo').hidden = false;
+  const ficha = document.getElementById('ficha');
+  ficha.hidden = false;
+  ficha.scrollTop = 0;
+}
+
+function cerrarFicha() {
+  document.getElementById('ficha').hidden = true;
+  document.getElementById('panelPedido').hidden = true;
+  document.getElementById('velo').hidden = true;
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+}
+document.getElementById('cerrarFicha').addEventListener('click', cerrarFicha);
+document.getElementById('cerrarPedido').addEventListener('click', cerrarFicha);
+document.getElementById('velo').addEventListener('click', cerrarFicha);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarFicha(); });
+
+// ---------- Pedido ----------
+function cargarPedido() {
+  try { return JSON.parse(localStorage.getItem('encantos-pedido') || '[]'); } catch { return []; }
+}
+function guardarPedido() {
+  try { localStorage.setItem('encantos-pedido', JSON.stringify(pedido)); } catch { /* sin almacenamiento */ }
+}
+function agregarAlPedido(p) {
+  const linea = pedido.find((l) => l.id === p.id);
+  if (linea) linea.cantidad++;
+  else pedido.push({ id: p.id, cantidad: 1 });
+  guardarPedido();
+  dibujarPedido();
+  avisar(`${p.nombre} agregada a tu pedido`);
+}
+function lineasPedido() {
+  return pedido.map((l) => ({ ...l, p: plantas.find((x) => x.id === l.id) })).filter((l) => l.p);
+}
+function dibujarPedido() {
+  const lineas = lineasPedido();
+  const unidades = lineas.reduce((s, l) => s + l.cantidad, 0);
+  const total = lineas.reduce((s, l) => s + l.cantidad * (Number(l.p.precio) || 0), 0);
+  document.getElementById('barraPedido').hidden = unidades === 0;
+  document.getElementById('resumenPedido').textContent =
+    `Ver mi pedido · ${unidades} ${unidades === 1 ? 'planta' : 'plantas'} · ${lempiras(total)}`;
+  document.getElementById('totalPedido').textContent = 'Total: ' + lempiras(total);
+  document.getElementById('listaPedido').innerHTML = lineas.map((l) => `
+    <div class="linea-pedido">
+      <div class="nom">${esc(l.p.nombre)}<br><small style="color:var(--gris)">${lempiras(l.p.precio)} c/u</small></div>
+      <div class="cantidad">
+        <button data-id="${esc(l.id)}" data-d="-1" aria-label="Quitar uno">−</button>
+        <span>${l.cantidad}</span>
+        <button data-id="${esc(l.id)}" data-d="1" aria-label="Agregar uno">+</button>
+      </div>
+      <div class="sub">${lempiras(l.cantidad * l.p.precio)}</div>
+    </div>`).join('');
+  document.querySelectorAll('.linea-pedido button').forEach((b) => b.addEventListener('click', () => {
+    const l = pedido.find((x) => x.id === b.dataset.id);
+    l.cantidad += Number(b.dataset.d);
+    pedido = pedido.filter((x) => x.cantidad > 0);
+    guardarPedido();
+    dibujarPedido();
+    if (!pedido.length) cerrarFicha();
+  }));
+}
+document.getElementById('btnVerPedido').addEventListener('click', () => {
+  document.getElementById('velo').hidden = false;
+  document.getElementById('panelPedido').hidden = false;
+});
+document.getElementById('btnVaciarPedido').addEventListener('click', () => {
+  pedido = [];
+  guardarPedido();
+  dibujarPedido();
+  cerrarFicha();
+});
+document.getElementById('btnEnviarPedido').addEventListener('click', () => {
+  const lineas = lineasPedido();
+  if (!lineas.length) return;
+  const total = lineas.reduce((s, l) => s + l.cantidad * (Number(l.p.precio) || 0), 0);
+  const texto =
+    `${saludo()} 🌿, quiero hacer este pedido${vendedora ? ' en ' + (config.negocio || 'Encantos') : ''}:\n\n` +
+    lineas.map((l) => `• ${l.cantidad} × ${l.p.nombre} — ${lempiras(l.cantidad * l.p.precio)}`).join('\n') +
+    `\n\n*Total: ${lempiras(total)}*\n¿Me confirman disponibilidad y entrega?`;
+  window.open(enlaceWhatsApp(texto), '_blank', 'noopener');
+});
+
+// ---------- Compartir ----------
+async function compartir(titulo, url) {
+  if (navigator.share) {
+    try { await navigator.share({ title: titulo, text: titulo, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(titulo + '\n' + url), '_blank', 'noopener');
+}
+document.getElementById('btnCompartir').addEventListener('click', () => {
+  // Una sola categoría sin otros filtros: usar el enlace con vista previa propia
+  let url = estado.cat && !estado.luz && !estado.q
+    ? new URL(`c/${estado.cat}.html`, location.href).toString()
+    : location.href.split('#')[0];
+  if (vendedora) url += '#v=' + vendedora.id;
+  compartir(`${document.getElementById('tituloSeccion').textContent} · ${config.negocio || 'Encantos'} 🌿`, url);
+});
+
+// ---------- Búsqueda ----------
+const inputBuscar = document.getElementById('buscar');
+inputBuscar.value = estado.q;
+inputBuscar.addEventListener('input', () => {
+  estado.q = inputBuscar.value;
+  clearTimeout(inputBuscar._t);
+  inputBuscar._t = setTimeout(dibujarTodo, 150);
+});
+
+cargar();

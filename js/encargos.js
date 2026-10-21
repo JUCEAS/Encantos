@@ -1,6 +1,6 @@
 // encargos.js — Catálogo de encargos: plantas que NO están en stock pero que
 // los clientes pueden pedir para que las traigamos. Lo que se guarda aquí es
-// lo que verá el público en encargos.html, así que nunca incluye costos.
+// lo que verá el público en catalogo.html, así que nunca incluye costos.
 
 async function guardarItemCatalogo(datos) {
   const item = {

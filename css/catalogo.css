@@ -178,3 +178,22 @@ main { padding: 14px 16px; max-width: 980px; margin: 0 auto; }
   background: var(--texto); color: white; padding: 10px 16px; border-radius: 999px;
   font-size: 14px; max-width: calc(100% - 32px); text-align: center;
 }
+
+/* ---------- Por encargo ---------- */
+.seccion-encargos { margin-top: 28px; padding-top: 18px; border-top: 2px dashed #d8d2c2; }
+.seccion-encargos h2 { font-size: 20px; margin: 0 0 4px; color: var(--verde); }
+.nota-encargos { color: var(--gris); font-size: 14px; margin: 0 0 14px; }
+.tarjeta.encargo { cursor: default; }
+.insignia.encargo { background: #e6eef6; color: #2f5f8a; }
+.desc-encargo { font-size: 12px; color: var(--gris); margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pedir-encargo { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.pedir-encargo .cantidad { display: flex; align-items: center; border: 1px solid #d8d2c2; border-radius: 999px; overflow: hidden; }
+.pedir-encargo .cantidad button { border: 0; background: #f4f1ea; width: 28px; height: 28px; font-size: 16px; cursor: pointer; }
+.pedir-encargo .cantidad span { min-width: 22px; text-align: center; font-size: 14px; }
+.pedir-encargo .btn-whatsapp.chico { flex: 1; padding: 7px 10px; font-size: 13px; margin: 0; }
+.bloque-cuenta { background: white; border-radius: 14px; padding: 14px 16px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.bloque-cuenta h3 { margin: 0 0 6px; font-size: 16px; }
+.bloque-cuenta p { font-size: 14px; color: var(--gris); margin: 0 0 8px; }
+.bloque-cuenta dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 10px; font-size: 14px; }
+.bloque-cuenta dt { color: var(--gris); }
+.bloque-cuenta dd { margin: 0; font-weight: 600; word-break: break-all; }

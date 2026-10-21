@@ -3,21 +3,22 @@ rules_version = '2';
 // Reglas de seguridad de Encantos Vivero
 // Copiar y pegar completo en: Firebase Console → Firestore Database → Reglas → Publicar
 //
-// - Inventario, clientes, ventas y proveedores: SOLO las cuentas de Google autorizadas.
-// - catalogo_publico (Fase 3): cualquiera puede VER, solo el equipo puede modificar.
+// - Datos privados (inventario, ventas, compras, clientes, pedidos, notas...):
+//   SOLO las cuentas autorizadas (entren con correo y contraseña o con Google).
+// - catalogo_publico (plantas disponibles) y configuracion (datos del negocio):
+//   cualquiera puede VER; solo el equipo puede modificar.
+// - catalogo (plantas por encargo): el público solo ve las marcadas como visibles.
 // - Todo lo demás: cerrado.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Misma lista que CORREOS_AUTORIZADOS en js/db.js
+    // Correos autorizados. Para agregar a otra persona: , 'sucorreo@gmail.com'
     function esEquipo() {
       return request.auth != null
-        && request.auth.token.email_verified == true
         && request.auth.token.email in [
           'juceas19@gmail.com',
           'sairareyes4@gmail.com'
-          // Para agregar a otra persona: , 'sucorreo@gmail.com'
         ];
     }
 
@@ -26,11 +27,24 @@ service cloud.firestore {
     match /ventas/{id}      { allow read, write: if esEquipo(); }
     match /proveedores/{id} { allow read, write: if esEquipo(); }
     match /compras/{id}     { allow read, write: if esEquipo(); }  // compras de mercadería
-    match /ajustes/{id}     { allow read, write: if esEquipo(); }  // correos de vendedoras, etc.
+    match /ajustes/{id}     { allow read, write: if esEquipo(); }  // correos de vendedoras, clave de Pl@ntNet
+    match /pedidos/{id}     { allow read, write: if esEquipo(); }  // encargos de clientes
+    match /notas/{id}       { allow read, write: if esEquipo(); }  // notas del equipo
 
-    // Catálogo público (se usará en la Fase 3): solo datos pensados para el cliente,
-    // nunca costos, ganancias ni datos de clientes.
+    // Plantas disponibles (copia pública del inventario, sin costos)
     match /catalogo_publico/{id} {
+      allow read: if true;
+      allow write: if esEquipo();
+    }
+
+    // Plantas por encargo: el público solo puede leer las visibles
+    match /catalogo/{id} {
+      allow read: if resource.data.visible == true || esEquipo();
+      allow write: if esEquipo();
+    }
+
+    // Datos del negocio que muestra el catálogo (WhatsApp, cuenta para el adelanto)
+    match /configuracion/{id} {
       allow read: if true;
       allow write: if esEquipo();
     }

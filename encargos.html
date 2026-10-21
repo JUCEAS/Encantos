@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3f6b3f">
+<title>Catálogo de plantas por encargo</title>
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --verde: #3f6b3f;
+    --verde-oscuro: #2c4c2c;
+    --verde-claro: #6b9b5e;
+    --crema: #f4f1ea;
+    --tierra: #8b5e34;
+    --texto: #2c2c2c;
+    --borde: #d8d2c2;
+    --whatsapp: #1f8f4e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Roboto, 'Segoe UI', sans-serif;
+    background: var(--crema);
+    color: var(--texto);
+    line-height: 1.4;
+  }
+  header.portada {
+    background: var(--verde);
+    color: white;
+    padding: 28px 16px 24px;
+    text-align: center;
+  }
+  header.portada h1 {
+    margin: 0 0 6px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  header.portada p { margin: 0 auto; max-width: 460px; font-size: 15px; opacity: 0.92; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+
+  .filtros { display: flex; gap: 8px; margin-bottom: 16px; }
+  .filtros input, .filtros select {
+    padding: 11px 12px;
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    font-size: 15px;
+    background: white;
+    min-width: 0;
+  }
+  .filtros input { flex: 1; }
+  .filtros select { max-width: 45%; }
+
+  .rejilla { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 560px) { .rejilla { grid-template-columns: 1fr 1fr; } }
+
+  .tarjeta {
+    background: white;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+  }
+  .tarjeta .foto {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    background: #e9e5d9;
+    display: block;
+  }
+  .tarjeta .sin-foto {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #e9e5d9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+  }
+  .tarjeta .cuerpo { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .chip {
+    align-self: flex-start;
+    background: var(--verde-claro);
+    color: white;
+    font-size: 11px;
+    padding: 2px 9px;
+    border-radius: 12px;
+  }
+  .tarjeta h3 { margin: 0; font-family: Georgia, serif; font-size: 19px; font-weight: 600; }
+  .tarjeta .descripcion { margin: 0; font-size: 14px; color: #555; }
+  .tarjeta .cuidados { margin: 0; font-size: 13px; color: #777; }
+  .tarjeta .entrega { margin: 0; font-size: 13px; color: var(--tierra); }
+  .tarjeta .precio { margin: 4px 0 0; font-size: 22px; font-weight: 700; color: var(--verde); }
+  .tarjeta .pedir { margin-top: auto; padding-top: 8px; display: flex; gap: 10px; align-items: center; }
+
+  .cantidad { display: flex; align-items: center; border: 1px solid var(--borde); border-radius: 10px; overflow: hidden; }
+  .cantidad button {
+    border: none; background: #f0ece2; width: 36px; height: 40px; font-size: 20px; color: var(--verde-oscuro); cursor: pointer;
+  }
+  .cantidad span { min-width: 30px; text-align: center; font-weight: 600; }
+
+  .btn-whatsapp {
+    flex: 1;
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    background: var(--whatsapp);
+    color: white;
+    padding: 11px 12px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .cuenta {
+    background: white;
+    border-radius: 14px;
+    padding: 18px;
+    margin-top: 22px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    border-left: 5px solid var(--tierra);
+  }
+  .cuenta h2 { margin: 0 0 6px; font-family: Georgia, serif; font-size: 20px; }
+  .cuenta p { margin: 0 0 10px; font-size: 14px; color: #555; }
+  .cuenta dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+  .cuenta dt { color: #888; }
+  .cuenta dd { margin: 0; font-weight: 600; word-break: break-word; }
+  .cuenta button {
+    margin-top: 12px;
+    background: var(--tierra);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .estado { text-align: center; color: #888; padding: 36px 12px; font-size: 15px; }
+  .estado button {
+    margin-top: 12px; background: var(--verde); color: white; border: none; border-radius: 10px; padding: 10px 16px; font-size: 15px; cursor: pointer;
+  }
+  footer { text-align: center; color: #999; font-size: 12px; padding: 20px 16px 32px; }
+</style>
+</head>
+<body>
+
+<header class="portada">
+  <h1 id="tituloNegocio">Encantos</h1>
+  <p>Plantas por encargo: dinos cuál te gusta y la traemos para ti.</p>
+</header>
+
+<main>
+  <div class="filtros" id="filtros" style="display:none;">
+    <input type="search" id="buscar" placeholder="Buscar planta...">
+    <select id="categoria"><option value="">Todas</option></select>
+  </div>
+
+  <div id="estado" class="estado">Cargando catálogo...</div>
+  <div class="rejilla" id="rejilla"></div>
+
+  <section class="cuenta" id="bloqueCuenta" style="display:none;"></section>
+</main>
+
+<footer>Precios en lempiras (L.). Tiempos de entrega aproximados.</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/encargos-publico.js"></script>
+</body>
+</html>
