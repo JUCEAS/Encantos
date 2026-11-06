@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3f6b3f">
+<title>Encantos · Ventas</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1 id="tituloNegocio">🌿 Encantos · Ventas</h1>
+  <button id="btnSesion" class="btn-sesion" style="display:none;" title="Cerrar sesión"></button>
+</header>
+
+<!-- ============ PANTALLA DE ACCESO ============ -->
+<div id="pantallaAcceso" class="pantalla-acceso">
+  <div class="caja-acceso">
+    <div class="logo-acceso">🌿</div>
+    <h2>Encantos · Ventas</h2>
+    <p id="mensajeAcceso">Comprobando sesión...</p>
+    <form id="formLogin" class="form-login" style="display:none;">
+      <label for="loginCorreo">Correo</label>
+      <input type="email" id="loginCorreo" autocomplete="username" required>
+      <label for="loginClave">Contraseña</label>
+      <input type="password" id="loginClave" autocomplete="current-password" required>
+      <p class="login-error" id="loginError"></p>
+      <button type="submit" class="btn" id="btnLogin">Entrar</button>
+    </form>
+    <button class="btn secundario" id="btnEntrarGoogle" style="display:none;">Entrar con Google</button>
+    <p class="login-nota" id="notaLogin" style="display:none;">La primera vez necesitas internet; después la app funciona sin conexión.</p>
+  </div>
+</div>
+
+<main>
+  <!-- ================= VENDER ================= -->
+  <section id="vista-vender" class="vista activa">
+    <p class="saludo-vendedora" id="saludo"></p>
+    <div class="buscador">
+      <input type="text" id="buscarProducto" placeholder="Buscar producto...">
+    </div>
+    <select id="filtroCategoria" class="filtro-categoria"></select>
+    <p class="ayuda-lista">Toca un producto para agregarlo a la venta.</p>
+    <div id="listaProductos"><div class="cargando">Cargando inventario...</div></div>
+  </section>
+
+  <!-- ================= MIS VENTAS ================= -->
+  <section id="vista-misventas" class="vista">
+    <div class="resumen-grid">
+      <div class="card"><div><div class="valor" id="totalHoy">L. 0</div><div class="etiqueta">Vendí hoy</div></div></div>
+      <div class="card"><div><div class="valor" id="totalMes">L. 0</div><div class="etiqueta">Vendí este mes</div></div></div>
+    </div>
+    <div id="listaMisVentas"><div class="cargando">Cargando ventas...</div></div>
+  </section>
+
+  <!-- ================= CLIENTES ================= -->
+  <section id="vista-clientes" class="vista">
+    <div class="buscador">
+      <input type="text" id="buscarCliente" placeholder="Buscar por nombre o celular...">
+    </div>
+    <div class="fila-botones" style="margin:0 0 12px;">
+      <button class="btn" id="btnNuevoCliente">+ Agregar cliente</button>
+    </div>
+    <div id="listaClientes"><div class="cargando">Cargando clientes...</div></div>
+  </section>
+</main>
+
+<!-- Barra de la venta en curso -->
+<div class="carrito-barra" id="barraCarrito" hidden>
+  <div class="resumen" id="resumenCarrito"></div>
+  <button class="btn" id="btnCobrar">Cobrar</button>
+</div>
+
+<nav class="tabbar">
+  <button class="tab activo" data-vista="vender"><span class="emoji">💰</span>Vender</button>
+  <button class="tab" data-vista="misventas"><span class="emoji">🧾</span>Mis ventas</button>
+  <button class="tab" data-vista="clientes"><span class="emoji">👤</span>Clientes</button>
+</nav>
+
+<!-- ============ MODAL: Cobrar ============ -->
+<div class="modal-overlay" id="modalCobrar">
+  <div class="modal">
+    <h2>Venta</h2>
+    <div id="lineasCarrito"></div>
+    <div class="total-carrito"><span>Total</span><span id="totalCarrito">L. 0.00</span></div>
+    <label for="buscarClienteVenta">Cliente</label>
+    <div id="clienteElegido"></div>
+    <div id="cajaBuscarClienteVenta">
+      <input type="text" id="buscarClienteVenta" placeholder="Escribe nombre o celular (opcional)">
+      <div class="sugerencias-cliente" id="sugerenciasCliente"></div>
+      <button type="button" class="btn chico secundario" id="btnClienteNuevoVenta" style="margin-top:6px;">+ Cliente nuevo</button>
+    </div>
+    <p class="login-error" id="errorCobrar"></p>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarCobro">Seguir vendiendo</button>
+      <button class="btn" id="btnConfirmarVenta">Confirmar venta</button>
+    </div>
+    <div class="fila-botones">
+      <button class="btn btn-cancelar" id="btnVaciarCarrito">Vaciar la venta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Cliente ============ -->
+<div class="modal-overlay" id="modalCliente">
+  <div class="modal">
+    <h2>Nuevo cliente</h2>
+    <label for="campoNombreCliente">Nombre</label>
+    <input type="text" id="campoNombreCliente" maxlength="80" placeholder="Nombre del cliente">
+    <label for="campoCelularCliente">Celular</label>
+    <input type="tel" id="campoCelularCliente" inputmode="tel" placeholder="9999-9999">
+    <div class="dos-columnas">
+      <div>
+        <label for="campoDepartamento">Departamento</label>
+        <select id="campoDepartamento"></select>
+      </div>
+      <div>
+        <label for="campoMunicipio">Municipio</label>
+        <select id="campoMunicipio"></select>
+      </div>
+    </div>
+    <label for="campoNotasCliente">Notas (opcional)</label>
+    <textarea id="campoNotasCliente" maxlength="300" placeholder="Ej.: busca orquídeas"></textarea>
+    <p class="login-error" id="errorCliente"></p>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarCliente">Cancelar</button>
+      <button class="btn" id="btnGuardarCliente">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>window.PAGINA_APP = 'vendedor';</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/db.js"></script>
+<script src="js/inventario.js"></script>
+<script src="js/clientes.js"></script>
+<script src="js/vender.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
+</body>
+</html>

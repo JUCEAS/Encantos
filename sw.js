@@ -1,8 +1,9 @@
 // Service Worker de Encantos — habilita el uso 100% sin internet
-const CACHE_NAME = 'encantos-cache-v37';
+const CACHE_NAME = 'encantos-cache-v38';
 const ASSETS = [
   './',
   './index.html',
+  './vender.html',
   './manifest.json',
   './css/styles.css',
   './js/firebase-config.js',
@@ -22,6 +23,11 @@ const ASSETS = [
   './js/pedidos.js',
   './js/notas.js',
   './js/negocio.js',
+  './js/gastos.js',
+  './js/finanzas.js',
+  './js/usuarios.js',
+  './js/app-finanzas.js',
+  './js/vender.js',
   'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
   'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
   'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',

@@ -21,8 +21,8 @@ document.querySelectorAll('.tabbar .tab').forEach((btn) => {
 
 // Pestañas de abajo: Inventario, Agotados, Ventas, Compras, Pedidos, Clientes y
 // Más. Lo demás (notas, encargos, proveedores, reportes) cuelga de "Más".
-const VISTAS_DE_MAS = ['mas', 'notas', 'encargos', 'proveedores', 'reportes'];
-const VISTAS_CON_BOTON_AGREGAR = ['inventario', 'compras', 'clientes', 'proveedores', 'encargos', 'pedidos', 'notas'];
+const VISTAS_DE_MAS = ['mas', 'notas', 'encargos', 'proveedores', 'reportes', 'finanzas', 'gastos', 'usuarios'];
+const VISTAS_CON_BOTON_AGREGAR = ['inventario', 'compras', 'clientes', 'proveedores', 'encargos', 'pedidos', 'notas', 'gastos', 'usuarios'];
 
 // Tarjetas del menú "Más" y botones "Volver"
 document.querySelectorAll('[data-ir]').forEach((el) => {
@@ -54,6 +54,9 @@ function cambiarVista(nombre) {
   if (nombre === 'pedidos') refrescarPedidos();
   if (nombre === 'encargos') refrescarEncargos();
   if (nombre === 'notas' || nombre === 'mas') refrescarNotas();
+  if (nombre === 'finanzas') refrescarFinanzas();
+  if (nombre === 'gastos') refrescarGastos();
+  if (nombre === 'usuarios') refrescarUsuarios();
 }
 
 // ---------- Botón flotante "+" según la pestaña activa ----------
@@ -66,6 +69,8 @@ document.getElementById('btnAgregar').addEventListener('click', () => {
   if (vistaActiva === 'vista-encargos') abrirModalEncargo();
   if (vistaActiva === 'vista-pedidos') abrirModalPedido();
   if (vistaActiva === 'vista-notas') abrirModalNota();
+  if (vistaActiva === 'vista-gastos') abrirModalGasto();
+  if (vistaActiva === 'vista-usuarios') abrirModalUsuario();
 });
 
 // Menú de acciones (reemplaza los confirm "Aceptar = … / Cancelar = …",
@@ -1174,7 +1179,7 @@ async function refrescarVentas() {
     <div class="card${v.anulada || v.corregida ? ' venta-anulada' : ''}" data-id="${escaparHtml(v.id)}">
       <div class="info">
         <h3>${escaparHtml(v.nombreProducto)} &times;${Number(v.cantidad) || 0}${v.anulada ? ' <span class="chip anulada">ANULADA</span>' : ''}${v.corregida ? ' <span class="chip corregida">CORREGIDA</span>' : ''}${v.corrigeA ? ' <span class="chip">✏️ corrección</span>' : ''}</h3>
-        <p>${new Date(v.fecha).toLocaleString()}</p>
+        <p>${new Date(v.fecha).toLocaleString()}${typeof nombrePersona === 'function' && v.vendidaPor ? ' · 🧑‍💼 ' + escaparHtml(nombrePersona(v.vendidaPor)) : ''}</p>
         ${(() => { const d = desglose(v.total, v.ganancia); return `
         <p class="precio">Venta ${formatoL(d.venta)} − Costo ${formatoL(d.costo)} = Ganancia ${formatoL(d.ganancia)}</p>
         <p class="pct-venta">📈 ${pct(d.sobreCosto)} sobre el costo &middot; ${pct(d.sobreVenta)} de la venta</p>`; })()}

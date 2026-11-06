@@ -3,8 +3,14 @@ rules_version = '2';
 // Reglas de seguridad de Encantos Vivero
 // Copiar y pegar completo en: Firebase Console → Firestore Database → Reglas → Publicar
 //
-// - Datos privados (inventario, ventas, compras, clientes, pedidos, notas...):
-//   SOLO las cuentas autorizadas (entren con correo y contraseña o con Google).
+// ROLES
+// - Dueños: ven y manejan todo. Los fundadores están fijos aquí abajo; otros
+//   dueños se pueden agregar desde la app (Más → Usuarios y permisos).
+// - Vendedor(a): solo puede ver el inventario, vender (descontar existencias),
+//   ver y agregar clientes, y ver SUS propias ventas. No puede cambiar precios,
+//   subir existencias, anular ventas ni ver compras, gastos o reportes.
+//   Se agrega desde la app; si se desactiva, pierde el acceso al instante.
+//
 // - catalogo_publico (plantas disponibles) y configuracion (datos del negocio):
 //   cualquiera puede VER; solo el equipo puede modificar.
 // - catalogo (plantas por encargo): el público solo ve las marcadas como visibles.
@@ -13,40 +19,105 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Correos autorizados. Para agregar a otra persona: , 'sucorreo@gmail.com'
-    function esEquipo() {
+    function correo() {
+      return request.auth.token.email.lower();
+    }
+
+    // Dueños fundadores. Para agregar otro de forma fija: , 'sucorreo@gmail.com'
+    function esDuenoFijo() {
       return request.auth != null
-        && request.auth.token.email in [
+        && request.auth.token.email != null
+        && correo() in [
           'juceas19@gmail.com',
           'sairareyes4@gmail.com'
         ];
     }
 
-    match /productos/{id}   { allow read, write: if esEquipo(); }
-    match /clientes/{id}    { allow read, write: if esEquipo(); }
-    match /ventas/{id}      { allow read, write: if esEquipo(); }
-    match /proveedores/{id} { allow read, write: if esEquipo(); }
-    match /compras/{id}     { allow read, write: if esEquipo(); }  // compras de mercadería
-    match /ajustes/{id}     { allow read, write: if esEquipo(); }  // correos de vendedoras, clave de Pl@ntNet
-    match /pedidos/{id}     { allow read, write: if esEquipo(); }  // encargos de clientes
-    match /notas/{id}       { allow read, write: if esEquipo(); }  // notas del equipo
+    function tienePerfil() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/usuarios/$(correo()));
+    }
+
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(correo())).data;
+    }
+
+    function esDueno() {
+      return esDuenoFijo()
+        || (tienePerfil() && perfil().rol == 'dueno' && perfil().activo == true);
+    }
+
+    function esVendedor() {
+      return !esDuenoFijo()
+        && tienePerfil() && perfil().rol == 'vendedor' && perfil().activo == true;
+    }
+
+    // Nombre que usaban las reglas anteriores: el equipo completo = dueños
+    function esEquipo() { return esDueno(); }
+
+    // ---------- Inventario ----------
+    match /productos/{id} {
+      allow read: if esDueno() || esVendedor();
+      allow write: if esDueno();
+      // La vendedora solo puede BAJAR las existencias (al vender)
+      allow update: if esVendedor()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock'])
+        && request.resource.data.stock < resource.data.stock;
+    }
+
+    // ---------- Clientes ----------
+    match /clientes/{id} {
+      allow read, create: if esDueno() || esVendedor();
+      allow update, delete: if esDueno();
+    }
+
+    // ---------- Ventas ----------
+    match /ventas/{id} {
+      allow read: if esDueno()
+        || (esVendedor() && resource.data.vendidaPor == correo());
+      allow create: if esDueno()
+        || (esVendedor()
+            && request.resource.data.vendidaPor == correo()
+            && !('anulada' in request.resource.data)
+            && !('corregida' in request.resource.data));
+      allow update, delete: if esDueno();
+    }
+
+    // ---------- Usuarios y permisos ----------
+    match /usuarios/{email} {
+      allow read: if esDueno() || (request.auth != null && request.auth.token.email != null && correo() == email);
+      allow write: if esDueno();
+    }
+
+    // ---------- Solo dueños ----------
+    match /gastos/{id}      { allow read, write: if esDueno(); }  // gastos del negocio
+    match /proveedores/{id} { allow read, write: if esDueno(); }
+    match /compras/{id}     { allow read, write: if esDueno(); }  // compras de mercadería
+    match /ajustes/{id}     { allow read, write: if esDueno(); }  // correos de vendedoras, clave de Pl@ntNet
+    match /pedidos/{id}     { allow read, write: if esDueno(); }  // encargos de clientes
+    match /notas/{id}       { allow read, write: if esDueno(); }  // notas del equipo
 
     // Plantas disponibles (copia pública del inventario, sin costos)
     match /catalogo_publico/{id} {
       allow read: if true;
-      allow write: if esEquipo();
+      allow write: if esDueno();
+      // Al vender, la vendedora solo actualiza "Disponible / Últimas / Agotada"
+      allow update: if esVendedor()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disponibilidad', 'actualizadoEl'])
+        && request.resource.data.disponibilidad in ['disponible', 'ultimas', 'agotado'];
     }
 
     // Plantas por encargo: el público solo puede leer las visibles
     match /catalogo/{id} {
-      allow read: if resource.data.visible == true || esEquipo();
-      allow write: if esEquipo();
+      allow read: if resource.data.visible == true || esDueno();
+      allow write: if esDueno();
     }
 
     // Datos del negocio que muestra el catálogo (WhatsApp, cuenta para el adelanto)
     match /configuracion/{id} {
       allow read: if true;
-      allow write: if esEquipo();
+      allow write: if esDueno();
     }
 
     // Cualquier otra colección queda bloqueada
