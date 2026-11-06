@@ -6,7 +6,42 @@
 let productos = [];
 let clientes = [];
 let misVentas = [];
-let carrito = []; // [{ id, nombre, precio, cantidad, stock }]
+let carrito = []; // [{ id, nombre, precio, cantidad }]
+let productosListos = false;
+// Producto que llegó al abrir la app desde una etiqueta (cámara del teléfono)
+const productoEscaneado = Escaner.tomarProductoDeLaDireccion();
+
+// La venta en curso se guarda en el teléfono: no se pierde si la app se recarga,
+// se actualiza o se abre de nuevo desde otra etiqueta escaneada.
+function claveCarrito() { return 'encantos-carrito:' + (DB.correoActual() || 'anonimo'); }
+function guardarCarrito() {
+  try { localStorage.setItem(claveCarrito(), JSON.stringify({ carrito, clienteVenta, guardado: Date.now() })); } catch (e) { /* sin almacenamiento */ }
+}
+function recuperarCarrito() {
+  try {
+    const d = JSON.parse(localStorage.getItem(claveCarrito()) || 'null');
+    // Una venta sin cobrar de hace más de 12 horas se descarta
+    if (d && Array.isArray(d.carrito) && Date.now() - (d.guardado || 0) < 12 * 3600 * 1000) {
+      carrito = d.carrito.filter((l) => l && l.id && l.cantidad > 0);
+      clienteVenta = d.clienteVenta || null;
+    }
+  } catch (e) { /* datos dañados: se empieza vacío */ }
+}
+
+function avisoFlotante(texto, error = false) {
+  let el = document.getElementById('avisoFlotante');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'avisoFlotante';
+    el.className = 'aviso-flotante';
+    document.body.appendChild(el);
+  }
+  el.textContent = texto;
+  el.classList.toggle('error', error);
+  el.classList.add('visible');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('visible'), 3500);
+}
 let clienteVenta = null;
 let nombreVendedora = '';
 
@@ -98,6 +133,26 @@ function pintarProductos() {
 
 document.getElementById('buscarProducto').addEventListener('input', pintarProductos);
 
+// Cuando la app se abre desde la cámara del teléfono con una etiqueta
+function agregarDesdeEtiqueta(id) {
+  const p = productos.find((x) => x.id === id);
+  if (!p) { avisoFlotante('❓ Esa etiqueta es de un producto que ya no está en el inventario.', true); return; }
+  const r = intentarAgregar(p);
+  avisoFlotante(r.mensaje, !r.ok);
+  if (r.ok && navigator.vibrate) navigator.vibrate(60);
+}
+
+// Revisa existencias y precio antes de sumar una unidad (sin ventanas de alerta)
+function intentarAgregar(p) {
+  const antes = enCarrito(p.id) ? enCarrito(p.id).cantidad : 0;
+  const stock = Number(p.stock) || 0;
+  if (stock <= 0) return { ok: false, mensaje: `⛔ "${p.nombre}" está agotado.` };
+  if (!(Number(p.precio) > 0)) return { ok: false, mensaje: `⚠️ "${p.nombre}" no tiene precio de venta. Pídele a la dueña que lo registre.` };
+  if (antes >= stock) return { ok: false, mensaje: `⚠️ Solo hay ${stock} de "${p.nombre}" y ya están en la venta.` };
+  agregarAlCarrito(p.id, true);
+  return { ok: true, mensaje: `✅ ${p.nombre} · ${formatoL(p.precio)} (${antes + 1} en la venta) — Total ${formatoL(totalCarrito())}` };
+}
+
 // Escanear etiquetas: cada lectura agrega una unidad a la venta
 document.getElementById('btnEscanear').addEventListener('click', () => {
   Escaner.abrir({
@@ -106,13 +161,7 @@ document.getElementById('btnEscanear').addEventListener('click', () => {
     alLeer: (codigo) => {
       const p = Escaner.productoDeCodigo(codigo, productos);
       if (!p) return { ok: false, mensaje: '❓ Esta etiqueta no es de ningún producto del inventario.' };
-      const antes = enCarrito(p.id) ? enCarrito(p.id).cantidad : 0;
-      const stock = Number(p.stock) || 0;
-      if (stock <= 0) return { ok: false, mensaje: `⛔ "${p.nombre}" está agotado.` };
-      if (!(Number(p.precio) > 0)) return { ok: false, mensaje: `⚠️ "${p.nombre}" no tiene precio de venta. Pídele a la dueña que lo registre.` };
-      if (antes >= stock) return { ok: false, mensaje: `⚠️ Solo hay ${stock} de "${p.nombre}" y ya están en la venta.` };
-      agregarAlCarrito(p.id, true);
-      return { ok: true, mensaje: `✅ ${p.nombre} · ${formatoL(p.precio)} (${antes + 1} en la venta) — Total ${formatoL(totalCarrito())}` };
+      return intentarAgregar(p);
     },
   });
 });
@@ -153,6 +202,7 @@ function quitarDelCarrito(id, todo = false) {
 function totalCarrito() { return r2(carrito.reduce((s, l) => s + l.precio * l.cantidad, 0)); }
 
 function pintarBarraCarrito() {
+  if (productosListos) guardarCarrito();
   const barra = document.getElementById('barraCarrito');
   const enVender = document.getElementById('vista-vender').classList.contains('activa');
   barra.hidden = !carrito.length || !enVender;
@@ -195,6 +245,7 @@ function pintarLineasCarrito() {
 }
 
 function pintarClienteElegido() {
+  if (productosListos) guardarCarrito();
   const caja = document.getElementById('clienteElegido');
   const buscar = document.getElementById('cajaBuscarClienteVenta');
   if (clienteVenta) {
@@ -237,6 +288,7 @@ document.getElementById('btnCancelarCobro').addEventListener('click', () => ocul
 document.getElementById('btnVaciarCarrito').addEventListener('click', () => {
   if (!confirm('¿Vaciar la venta?')) return;
   carrito = []; clienteVenta = null;
+  guardarCarrito();
   ocultarModal('modalCobrar'); pintarProductos(); pintarBarraCarrito();
 });
 document.getElementById('btnClienteNuevoVenta').addEventListener('click', () => abrirModalCliente(true));
@@ -309,6 +361,8 @@ document.getElementById('btnConfirmarVenta').addEventListener('click', async () 
   }
   boton.disabled = false;
   carrito = carrito.filter((l) => !vendidas.includes(l));
+  if (!fallidas.length) clienteVenta = null;
+  guardarCarrito();
   pintarProductos();
   pintarBarraCarrito();
   if (!fallidas.length) {
@@ -520,6 +574,12 @@ DB.authReady.then(async () => {
     // Si alguien vendió mientras tanto, el carrito no puede pasar de lo que queda
     carrito.forEach((l) => { const p = productos.find((x) => x.id === l.id); if (p) l.cantidad = Math.min(l.cantidad, Math.max(0, Number(p.stock) || 0)); });
     carrito = carrito.filter((l) => l.cantidad > 0);
+    if (!productosListos) {
+      recuperarCarrito();
+      carrito = carrito.filter((l) => productos.some((p) => p.id === l.id && (Number(p.stock) || 0) > 0));
+      productosListos = true;
+      if (productoEscaneado) agregarDesdeEtiqueta(productoEscaneado);
+    }
     llenarCategorias();
     pintarProductos();
     pintarBarraCarrito();
@@ -534,6 +594,32 @@ DB.authReady.then(async () => {
   });
 });
 
-window.addEventListener('beforeunload', (e) => {
-  if (carrito.length) { e.preventDefault(); e.returnValue = ''; }
-});
+// ---------- Versión nueva de la app: se recarga sola ----------
+// La venta en curso está guardada en el teléfono, así que no se pierde.
+if ('serviceWorker' in navigator) {
+  const habiaVersion = !!navigator.serviceWorker.controller;
+  let recargaPendiente = false;
+  const recargarSiSePuede = () => {
+    if (!recargaPendiente) return;
+    if (document.querySelector('.modal-overlay.activo') || document.querySelector('.escaner-capa')) return;
+    recargaPendiente = false;
+    recargando = true;
+    location.reload();
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!habiaVersion) return;
+    recargaPendiente = true;
+    recargarSiSePuede();
+  });
+  setInterval(recargarSiSePuede, 3000);
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch((err) => console.warn('SW no registrado', err));
+  });
+}
+
+let recargando = false;

@@ -1,8 +1,11 @@
 // escaner.js — Lee códigos QR (y códigos de barras de fábrica cuando el teléfono
 // lo permite) con la cámara. Lo usan la app de dueños y la de la vendedora.
 //
-// Cada producto tiene su QR: "ENC:<id del producto>". Todas las plantas del
-// mismo producto llevan la misma etiqueta. Los productos que ya traen código de
+// Cada producto tiene su QR. Es un ENLACE a la app (…/?producto=<id>), así que
+// se puede leer con el botón 🔳 de la app o con la cámara normal del teléfono:
+// la vendedora lo agrega a la venta y los dueños ven las opciones del producto.
+// Las primeras etiquetas impresas ("ENC:<id>") siguen sirviendo con el botón 🔳.
+// Todas las plantas del mismo producto llevan la misma etiqueta. Los productos que ya traen código de
 // fábrica (abonos, bolsas de piedra pómez...) pueden guardar ese código en su
 // ficha y se encuentran igual.
 
@@ -25,7 +28,38 @@ function cargarScript(url) {
   return scriptsCargados[url];
 }
 
-function codigoDeProducto(producto) { return PREFIJO_QR + producto.id; }
+const PARAM_PRODUCTO = 'producto';
+
+// Dirección de la app (la misma carpeta donde está publicada, sirva para la marca que sea)
+function urlBaseApp() {
+  return new URL('./', location.href).href;
+}
+
+function codigoDeProducto(producto) {
+  return urlBaseApp() + '?' + PARAM_PRODUCTO + '=' + encodeURIComponent(producto.id);
+}
+
+// Saca el id del producto de un código leído (enlace nuevo o etiqueta "ENC:" vieja)
+function idDeCodigo(codigo) {
+  const c = String(codigo || '').trim();
+  if (c.startsWith(PREFIJO_QR)) return c.slice(PREFIJO_QR.length);
+  if (/^https?:\/\//i.test(c)) {
+    try { return new URL(c).searchParams.get(PARAM_PRODUCTO); } catch (e) { return null; }
+  }
+  return null;
+}
+
+// Si la app se abrió desde una etiqueta (cámara del teléfono), devuelve el id
+// del producto y lo quita de la dirección para que no se repita al recargar.
+function tomarProductoDeLaDireccion() {
+  const params = new URLSearchParams(location.search);
+  const id = params.get(PARAM_PRODUCTO);
+  if (!id) return null;
+  params.delete(PARAM_PRODUCTO);
+  const resto = params.toString();
+  history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
+  return id;
+}
 
 function limpiarCodigo(c) { return String(c || '').trim(); }
 
@@ -33,7 +67,7 @@ function limpiarCodigo(c) { return String(c || '').trim(); }
 function productoDeCodigo(codigo, productos) {
   const c = limpiarCodigo(codigo);
   if (!c) return null;
-  const id = c.startsWith(PREFIJO_QR) ? c.slice(PREFIJO_QR.length) : null;
+  const id = idDeCodigo(c);
   if (id) return productos.find((p) => p.id === id) || null;
   return productos.find((p) => p.codigoBarras && limpiarCodigo(p.codigoBarras) === c) || null;
 }
@@ -254,5 +288,7 @@ window.Escaner = {
   abrir,
   codigoDeProducto,
   productoDeCodigo,
+  idDeCodigo,
+  tomarProductoDeLaDireccion,
   construirPDFEtiquetas,
 };

@@ -108,7 +108,7 @@ firebaseAuth.onAuthStateChanged(async (user) => {
     // Cada rol tiene su propia pantalla: la vendedora usa vender.html
     const pagina = window.PAGINA_APP || 'dueno';
     if (rolActual === ROLES.vendedor && pagina !== 'vendedor') {
-      location.replace('vender.html');
+      location.replace('vender.html' + location.search);
       return;
     }
     authReadyResolve(user);

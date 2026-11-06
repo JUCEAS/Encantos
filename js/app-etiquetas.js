@@ -111,7 +111,7 @@ document.getElementById('btnLeerCodigoBarras').addEventListener('click', () => {
   Escaner.abrir({
     titulo: 'Leer código de fábrica',
     alLeer: (codigo) => {
-      if (codigo.startsWith(Escaner.PREFIJO_QR)) return { ok: false, mensaje: '⚠️ Esa es una etiqueta QR de la app; aquí va el código que trae el producto de fábrica.' };
+      if (Escaner.idDeCodigo(codigo)) return { ok: false, mensaje: '⚠️ Esa es una etiqueta QR de la app; aquí va el código que trae el producto de fábrica.' };
       document.getElementById('campoCodigoBarras').value = codigo;
       return { ok: true, mensaje: '✅ ' + codigo };
     },

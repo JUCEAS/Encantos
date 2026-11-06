@@ -2885,6 +2885,9 @@ if ('serviceWorker' in navigator) {
 // ---------- Acceso: correo y contraseña (o Google) ----------
 const pantallaAcceso = document.getElementById('pantallaAcceso');
 const mensajeAcceso = document.getElementById('mensajeAcceso');
+// Si se abrió la app escaneando una etiqueta con la cámara del teléfono.
+// No se quita aún de la dirección: si entra la vendedora, se le pasa a su pantalla.
+const productoEscaneado = new URLSearchParams(location.search).get('producto');
 const btnEntrarGoogle = document.getElementById('btnEntrarGoogle');
 const formLogin = document.getElementById('formLogin');
 const btnSesion = document.getElementById('btnSesion');
@@ -2927,6 +2930,16 @@ DB.alCambiarSesion((user, estado, correo) => {
   mensajeAcceso.textContent = estado === 'no-autorizado'
     ? 'La cuenta ' + correo + ' no tiene permiso para usar Encantos. Entra con una cuenta autorizada.'
     : 'Inicia sesión para entrar a tu vivero.';
+  // Un cliente que escaneó una etiqueta sin tener cuenta: se le ofrece el catálogo
+  if (productoEscaneado && !document.getElementById('linkCatalogoCliente')) {
+    const a = document.createElement('a');
+    a.id = 'linkCatalogoCliente';
+    a.href = 'catalogo.html';
+    a.className = 'btn';
+    a.style.cssText = 'display:block;text-align:center;text-decoration:none;margin-bottom:14px;';
+    a.textContent = '🌿 Ver el catálogo de plantas';
+    mensajeAcceso.insertAdjacentElement('afterend', a);
+  }
 });
 
 formLogin.addEventListener('submit', async (e) => {
@@ -2965,6 +2978,13 @@ document.getElementById('btnCerrarSesion').addEventListener('click', confirmarCe
 
 DB.authReady.then(() => {
   refrescarInventario();
+  if (productoEscaneado) {
+    Escaner.tomarProductoDeLaDireccion();
+    Inventario.listarProductos().then((lista) => {
+      if (lista.some((p) => p.id === productoEscaneado)) mostrarOpcionesProducto(productoEscaneado);
+      else alert('Esa etiqueta es de un producto que ya no está en el inventario.');
+    });
+  }
   // Revisa que el catálogo público coincida con el inventario (precios, fotos,
   // disponibilidad). Solo con internet, para no gastar tiempo sin señal.
   if (navigator.onLine) {
