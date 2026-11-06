@@ -21,7 +21,7 @@ document.querySelectorAll('.tabbar .tab').forEach((btn) => {
 
 // Pestañas de abajo: Inventario, Agotados, Ventas, Compras, Pedidos, Clientes y
 // Más. Lo demás (notas, encargos, proveedores, reportes) cuelga de "Más".
-const VISTAS_DE_MAS = ['mas', 'notas', 'encargos', 'proveedores', 'reportes', 'finanzas', 'gastos', 'usuarios'];
+const VISTAS_DE_MAS = ['mas', 'notas', 'encargos', 'proveedores', 'reportes', 'finanzas', 'gastos', 'usuarios', 'etiquetas'];
 const VISTAS_CON_BOTON_AGREGAR = ['inventario', 'compras', 'clientes', 'proveedores', 'encargos', 'pedidos', 'notas', 'gastos', 'usuarios'];
 
 // Tarjetas del menú "Más" y botones "Volver"
@@ -57,6 +57,7 @@ function cambiarVista(nombre) {
   if (nombre === 'finanzas') refrescarFinanzas();
   if (nombre === 'gastos') refrescarGastos();
   if (nombre === 'usuarios') refrescarUsuarios();
+  if (nombre === 'etiquetas') refrescarEtiquetas();
 }
 
 // ---------- Botón flotante "+" según la pestaña activa ----------
@@ -271,9 +272,11 @@ async function mostrarOpcionesProducto(id) {
     // Sin existencias: no se ofrece vender
     const accion = await elegirAccion(producto.nombre, [
       { id: 'comprar', texto: '🛒 Registrar compra (reabastecer)', principal: true },
+      { id: 'etiqueta', texto: '🏷️ Imprimir etiqueta QR' },
       { id: 'editar', texto: '✏️ Editar o eliminar' },
     ], '⛔ No se puede vender: no hay existencias (stock 0). Si compraste más, registra la compra.');
-    if (accion === 'comprar') abrirModalCompra(producto);
+    if (accion === 'etiqueta') etiquetasDeProducto(producto);
+    else if (accion === 'comprar') abrirModalCompra(producto);
     else if (accion === 'editar') abrirModalProducto(producto);
     return;
   }
@@ -282,8 +285,10 @@ async function mostrarOpcionesProducto(id) {
     { id: 'vender', texto: '💰 Vender', principal: true },
     { id: 'comprar', texto: '🛒 Registrar compra' },
     { id: 'interesados', texto: '💎 ¿Quién busca esta planta?' },
+    { id: 'etiqueta', texto: '🏷️ Imprimir etiqueta QR' },
     { id: 'editar', texto: '✏️ Editar o eliminar' },
   ]);
+  if (accion === 'etiqueta') { etiquetasDeProducto(producto); return; }
   if (accion === 'interesados') {
     const hay = await avisarInteresados([producto], `💎 Interesados en ${producto.nombre}`);
     if (!hay) alert('Ningún cliente tiene esta planta (o su categoría) en su lista de plantas que anda buscando. Puedes agregarla en la ficha del cliente.');
@@ -378,6 +383,7 @@ async function abrirModalProducto(producto = null) {
   selectSol.value = producto?.tipoSol || '';
   selectRiego.value = producto?.riego || '';
   document.getElementById('campoNombreCientifico').value = producto?.nombreCientifico || '';
+  document.getElementById('campoCodigoBarras').value = producto?.codigoBarras || '';
   document.getElementById('campoUbicacion').value = producto?.ubicacion || '';
   document.getElementById('campoDificultad').value = producto?.dificultad || '';
   document.getElementById('campoMascotas').value = producto?.mascotas || '';
@@ -736,6 +742,7 @@ document.getElementById('btnGuardarProducto').addEventListener('click', async ()
     categoria: document.getElementById('campoCategoria').value,
     descripcion: document.getElementById('campoDescripcion').value,
     nombreCientifico: document.getElementById('campoNombreCientifico').value,
+    codigoBarras: document.getElementById('campoCodigoBarras').value,
     tipoSol: document.getElementById('campoTipoSol').value,
     riego: document.getElementById('campoRiego').value,
     ubicacion: document.getElementById('campoUbicacion').value,

@@ -42,6 +42,7 @@
     <div class="buscador">
       <input type="text" id="buscarTexto" placeholder="Buscar por nombre...">
       <button id="btnBuscarFoto" title="Buscar con una foto">📷</button>
+      <button id="btnEscanearQR" title="Escanear etiqueta QR">🔳</button>
     </div>
     <select id="filtroCategoria" class="filtro-categoria"></select>
     <div class="fila-catalogo">
@@ -161,6 +162,9 @@
     <div class="card menu-item" data-ir="reportes">
       <div class="info"><h3>📊 Reportes y respaldo</h3><p>PDF para compartir por WhatsApp</p></div>
     </div>
+    <div class="card menu-item" data-ir="etiquetas">
+      <div class="info"><h3>🏷️ Etiquetas QR</h3><p>Imprimir etiquetas para escanear las plantas al vender</p></div>
+    </div>
     <div class="card menu-item" data-ir="usuarios">
       <div class="info"><h3>👥 Usuarios y permisos</h3><p>Agregar vendedoras con acceso solo para vender</p></div>
     </div>
@@ -201,6 +205,32 @@
     </div>
     <p class="nota-margen">Las compras de plantas e insumos para vender no van aquí: se registran en 🛒 Compras porque se vuelven inventario.</p>
     <div id="listaGastos"><div class="cargando">Cargando gastos...</div></div>
+  </section>
+
+  <!-- ================= ETIQUETAS QR ================= -->
+  <section id="vista-etiquetas" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
+    <p class="nota-margen">Cada producto tiene su propio código QR: todas las plantas del mismo producto llevan la misma etiqueta. Imprímelas en papel adhesivo de vinil o plastifícalas para que aguanten el riego.</p>
+    <div class="buscador">
+      <input type="text" id="buscarEtiquetas" placeholder="Buscar producto...">
+    </div>
+    <div class="fila-botones" style="margin:0 0 10px;">
+      <button class="btn chico secundario" id="btnEtiquetasExistencias">Marcar todo lo que hay en existencia</button>
+      <button class="btn chico secundario" id="btnEtiquetasNinguna">Desmarcar todo</button>
+    </div>
+    <div id="listaEtiquetas"><div class="cargando">Cargando productos...</div></div>
+    <div class="card opciones-etiquetas">
+      <div class="info">
+        <label for="campoTamanoEtiqueta">Tamaño de etiqueta</label>
+        <select id="campoTamanoEtiqueta"></select>
+        <label class="interruptor" style="margin-top:10px;"><input type="checkbox" id="campoEtiquetaPrecio" checked> Mostrar el precio</label>
+        <p class="nota-catalogo" id="resumenEtiquetas">0 etiquetas</p>
+      </div>
+    </div>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnPdfEtiquetas">📄 Descargar PDF</button>
+      <button class="btn whatsapp" id="btnCompartirEtiquetas">📤 Compartir</button>
+    </div>
   </section>
 
   <!-- ================= USUARIOS ================= -->
@@ -428,6 +458,12 @@
 
     <label>Descripción</label>
     <textarea id="campoDescripcion"></textarea>
+
+    <label for="campoCodigoBarras">Código de barras de fábrica (opcional)</label>
+    <div class="buscador" style="margin:0;">
+      <input type="text" id="campoCodigoBarras" inputmode="numeric" placeholder="Solo si el producto ya trae código">
+      <button type="button" id="btnLeerCodigoBarras" title="Leer con la cámara">🔳</button>
+    </div>
 
     <!-- Datos de la planta: se ocultan cuando es un insumo -->
     <div id="camposPlanta">
@@ -861,7 +897,9 @@
 <script src="js/gastos.js"></script>
 <script src="js/finanzas.js"></script>
 <script src="js/usuarios.js"></script>
+<script src="js/escaner.js"></script>
 <script src="js/app.js"></script>
 <script src="js/app-finanzas.js"></script>
+<script src="js/app-etiquetas.js"></script>
 </body>
 </html>

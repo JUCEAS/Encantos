@@ -62,7 +62,7 @@ function pintarProductos() {
   const cat = document.getElementById('filtroCategoria').value;
   const lista = productos.filter((p) =>
     (!cat || p.categoria === cat) &&
-    (!q || normalizar(p.nombre).includes(q) || normalizar(p.nombreCientifico).includes(q) || normalizar(p.categoria).includes(q)));
+    (!q || normalizar(p.nombre).includes(q) || normalizar(p.nombreCientifico).includes(q) || normalizar(p.categoria).includes(q) || (p.codigoBarras && normalizar(p.codigoBarras) === q)));
   // Primero los que hay en existencia
   lista.sort((a, b) => ((Number(b.stock) > 0) - (Number(a.stock) > 0)) || (a.nombre || '').localeCompare(b.nombre || ''));
   const caja = document.getElementById('listaProductos');
@@ -81,21 +81,47 @@ function pintarProductos() {
       <div class="info">
         <h3>${escaparHtml(p.nombre)}${ya ? ` <span class="chip">🛒 ${ya.cantidad}</span>` : ''}</h3>
         <p>${info.emoji} ${escaparHtml(info.nombre)}</p>
-        <p class="existencias">${stock <= 0 ? '<span class="agotado">Agotado</span>' : `Quedan ${disponible}${ya ? ' (sin contar la venta)' : ''}`}</p>
+        <p class="existencias">${stock <= 0 ? '<span class="agotado">Agotado</span>' : `Quedan ${disponible}${ya ? ' después de esta venta' : ''}`}</p>
       </div>
-      <div class="precio">${formatoL(p.precio)}</div>
+      <div class="lado-precio">
+        <div class="precio">${formatoL(p.precio)}</div>
+        ${ya ? `<button type="button" class="btn-quitar" data-quitar="${escaparHtml(p.id)}">− Quitar</button>` : ''}
+      </div>
     </div>`;
   }).join('');
   caja.querySelectorAll('.producto-venta').forEach((el) => el.addEventListener('click', () => agregarAlCarrito(el.dataset.id)));
+  caja.querySelectorAll('[data-quitar]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    quitarDelCarrito(b.dataset.quitar);
+  }));
 }
 
 document.getElementById('buscarProducto').addEventListener('input', pintarProductos);
+
+// Escanear etiquetas: cada lectura agrega una unidad a la venta
+document.getElementById('btnEscanear').addEventListener('click', () => {
+  Escaner.abrir({
+    titulo: 'Escanear para vender',
+    continuo: true,
+    alLeer: (codigo) => {
+      const p = Escaner.productoDeCodigo(codigo, productos);
+      if (!p) return { ok: false, mensaje: '❓ Esta etiqueta no es de ningún producto del inventario.' };
+      const antes = enCarrito(p.id) ? enCarrito(p.id).cantidad : 0;
+      const stock = Number(p.stock) || 0;
+      if (stock <= 0) return { ok: false, mensaje: `⛔ "${p.nombre}" está agotado.` };
+      if (!(Number(p.precio) > 0)) return { ok: false, mensaje: `⚠️ "${p.nombre}" no tiene precio de venta. Pídele a la dueña que lo registre.` };
+      if (antes >= stock) return { ok: false, mensaje: `⚠️ Solo hay ${stock} de "${p.nombre}" y ya están en la venta.` };
+      agregarAlCarrito(p.id, true);
+      return { ok: true, mensaje: `✅ ${p.nombre} · ${formatoL(p.precio)} (${antes + 1} en la venta) — Total ${formatoL(totalCarrito())}` };
+    },
+  });
+});
 document.getElementById('filtroCategoria').addEventListener('change', pintarProductos);
 
 // =========================================================
 // VENTA (carrito)
 // =========================================================
-function agregarAlCarrito(id) {
+function agregarAlCarrito(id, silencioso = false) {
   const p = productos.find((x) => x.id === id);
   if (!p) return;
   const stock = Number(p.stock) || 0;
@@ -108,7 +134,18 @@ function agregarAlCarrito(id) {
   } else {
     carrito.push({ id, nombre: p.nombre, precio: Number(p.precio), cantidad: 1 });
   }
-  if (navigator.vibrate) navigator.vibrate(20);
+  if (navigator.vibrate && !silencioso) navigator.vibrate(20);
+  pintarProductos();
+  pintarBarraCarrito();
+}
+
+// Quita una unidad (o la línea completa) de la venta que todavía no se cobra
+function quitarDelCarrito(id, todo = false) {
+  const i = carrito.findIndex((l) => l.id === id);
+  if (i < 0) return;
+  if (todo || carrito[i].cantidad <= 1) carrito.splice(i, 1);
+  else carrito[i].cantidad--;
+  if (navigator.vibrate) navigator.vibrate(15);
   pintarProductos();
   pintarBarraCarrito();
 }
@@ -133,6 +170,7 @@ function pintarLineasCarrito() {
         <button type="button" data-menos="${i}" aria-label="Quitar uno">−</button>
         <span>${l.cantidad}</span>
         <button type="button" data-mas="${i}" aria-label="Agregar uno">+</button>
+        <button type="button" class="quitar-linea" data-borrar="${i}" aria-label="Quitar de la venta">🗑</button>
       </div>
     </div>`).join('');
   document.getElementById('totalCarrito').textContent = formatoL(totalCarrito());
@@ -142,6 +180,10 @@ function pintarLineasCarrito() {
     if (l.cantidad <= 0) carrito.splice(Number(b.dataset.menos), 1);
     if (!carrito.length) { ocultarModal('modalCobrar'); }
     pintarLineasCarrito(); pintarProductos(); pintarBarraCarrito();
+  }));
+  caja.querySelectorAll('[data-borrar]').forEach((b) => b.addEventListener('click', () => {
+    quitarDelCarrito(carrito[Number(b.dataset.borrar)].id, true);
+    if (!carrito.length) ocultarModal('modalCobrar'); else pintarLineasCarrito();
   }));
   caja.querySelectorAll('[data-mas]').forEach((b) => b.addEventListener('click', () => {
     const l = carrito[Number(b.dataset.mas)];

@@ -93,6 +93,7 @@ async function guardarProducto(datos) {
     categoria: datos.categoria,
     descripcion: datos.descripcion.trim(),
     nombreCientifico: (datos.nombreCientifico || '').trim(),
+    codigoBarras: String(datos.codigoBarras || '').trim().slice(0, 64),
     tipoSol: datos.tipoSol || '',
     riego: datos.riego || '',
     ubicacion: datos.ubicacion || '',
@@ -147,7 +148,8 @@ async function buscarPorTexto(texto) {
       (p.nombre || '').toLowerCase().includes(q) ||
       (p.descripcion || '').toLowerCase().includes(q) ||
       (p.nombreCientifico || '').toLowerCase().includes(q) ||
-      (p.categoria || '').toLowerCase().includes(q)
+      (p.categoria || '').toLowerCase().includes(q) ||
+      (p.codigoBarras && String(p.codigoBarras).toLowerCase() === q)
   );
 }
 

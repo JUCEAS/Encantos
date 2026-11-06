@@ -41,9 +41,10 @@
     <p class="saludo-vendedora" id="saludo"></p>
     <div class="buscador">
       <input type="text" id="buscarProducto" placeholder="Buscar producto...">
+      <button id="btnEscanear" title="Escanear etiqueta QR">🔳</button>
     </div>
     <select id="filtroCategoria" class="filtro-categoria"></select>
-    <p class="ayuda-lista">Toca un producto para agregarlo a la venta.</p>
+    <p class="ayuda-lista">Toca un producto o escanea su etiqueta 🔳 para agregarlo a la venta.</p>
     <div id="listaProductos"><div class="cargando">Cargando inventario...</div></div>
   </section>
 
@@ -140,6 +141,7 @@
 <script src="js/db.js"></script>
 <script src="js/inventario.js"></script>
 <script src="js/clientes.js"></script>
+<script src="js/escaner.js"></script>
 <script src="js/vender.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
