@@ -143,6 +143,12 @@
 
   <!-- ================= MÁS ================= -->
   <section id="vista-mas" class="vista">
+    <div class="card menu-item" data-ir="finanzas">
+      <div class="info"><h3>📈 Estado financiero</h3><p>Ganancia real del mes: ventas, costo, gastos y dinero en caja</p></div>
+    </div>
+    <div class="card menu-item" data-ir="gastos">
+      <div class="info"><h3>🧾 Gastos</h3><p>Luz, bolsas, transporte, pago a vendedoras...</p></div>
+    </div>
     <div class="card menu-item" data-ir="notas">
       <div class="info"><h3>📝 Notas <span id="contadorNotas" class="chip" style="display:none;">0</span></h3><p>Pendientes y recordatorios de las dos</p></div>
     </div>
@@ -155,12 +161,53 @@
     <div class="card menu-item" data-ir="reportes">
       <div class="info"><h3>📊 Reportes y respaldo</h3><p>PDF para compartir por WhatsApp</p></div>
     </div>
+    <div class="card menu-item" data-ir="usuarios">
+      <div class="info"><h3>👥 Usuarios y permisos</h3><p>Agregar vendedoras con acceso solo para vender</p></div>
+    </div>
     <div class="card menu-item" id="menuDatosNegocio">
       <div class="info"><h3>⚙️ Datos del negocio y del catálogo</h3><p>WhatsApp, vendedoras, cuenta bancaria y enlace del catálogo</p></div>
     </div>
     <div class="fila-botones">
       <button class="btn peligro" id="btnCerrarSesion">Cerrar sesión</button>
     </div>
+  </section>
+
+  <!-- ================= ESTADO FINANCIERO ================= -->
+  <section id="vista-finanzas" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
+    <div class="selector-mes" id="selectorMesFinanzas">
+      <button type="button" class="flecha-mes" data-dir="-1" aria-label="Mes anterior">◀</button>
+      <button type="button" class="nombre-mes">Este mes</button>
+      <button type="button" class="flecha-mes" data-dir="1" aria-label="Mes siguiente">▶</button>
+    </div>
+    <div id="contenidoFinanzas"><div class="cargando">Calculando...</div></div>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnPdfFinanzas">📄 Descargar PDF</button>
+      <button class="btn whatsapp" id="btnCompartirFinanzas">📤 Compartir</button>
+    </div>
+  </section>
+
+  <!-- ================= GASTOS ================= -->
+  <section id="vista-gastos" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
+    <div class="selector-mes" id="selectorMesGastos">
+      <button type="button" class="flecha-mes" data-dir="-1" aria-label="Mes anterior">◀</button>
+      <button type="button" class="nombre-mes">Este mes</button>
+      <button type="button" class="flecha-mes" data-dir="1" aria-label="Mes siguiente">▶</button>
+    </div>
+    <div class="resumen-grid">
+      <div class="card"><div><div class="valor" id="resumenGastosMes">L. 0</div><div class="etiqueta">Gastado en el mes</div></div></div>
+      <div class="card"><div><div class="valor" id="resumenGastosCantidad">0</div><div class="etiqueta">Gastos registrados</div></div></div>
+    </div>
+    <p class="nota-margen">Las compras de plantas e insumos para vender no van aquí: se registran en 🛒 Compras porque se vuelven inventario.</p>
+    <div id="listaGastos"><div class="cargando">Cargando gastos...</div></div>
+  </section>
+
+  <!-- ================= USUARIOS ================= -->
+  <section id="vista-usuarios" class="vista">
+    <button class="volver" data-ir="mas">&larr; Volver</button>
+    <p class="nota-margen">La vendedora entra con su correo en la misma dirección de la app y automáticamente ve solo la pantalla de ventas. Si la desactivas, pierde el acceso al instante.</p>
+    <div id="listaUsuarios"><div class="cargando">Cargando usuarios...</div></div>
   </section>
 
   <!-- ================= NOTAS ================= -->
@@ -312,6 +359,52 @@
   <button class="tab" data-vista="clientes"><span class="emoji">👤</span>Clientes</button>
   <button class="tab" data-vista="mas"><span class="emoji">☰<span class="insignia" id="insigniaNotas" hidden></span></span>Más</button>
 </nav>
+
+<!-- ============ MODAL: Gasto ============ -->
+<div class="modal-overlay" id="modalGasto">
+  <div class="modal">
+    <h2>Nuevo gasto</h2>
+    <label for="campoGastoCategoria">¿En qué se gastó?</label>
+    <select id="campoGastoCategoria"></select>
+    <label for="campoGastoMonto">Monto (L.)</label>
+    <input type="number" id="campoGastoMonto" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+    <label for="campoGastoFecha">Fecha</label>
+    <input type="date" id="campoGastoFecha">
+    <label for="campoGastoDescripcion">Detalle (opcional)</label>
+    <input type="text" id="campoGastoDescripcion" maxlength="200" placeholder="Ej.: 100 bolsas medianas">
+    <p class="login-error" id="errorGasto"></p>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarGasto">Cancelar</button>
+      <button class="btn" id="btnGuardarGasto">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Usuario ============ -->
+<div class="modal-overlay" id="modalUsuario">
+  <div class="modal">
+    <h2 id="tituloModalUsuario">Agregar persona</h2>
+    <label for="campoUsuarioNombre">Nombre</label>
+    <input type="text" id="campoUsuarioNombre" maxlength="60" placeholder="Ej.: María">
+    <label for="campoUsuarioCorreo">Correo con el que va a entrar</label>
+    <input type="email" id="campoUsuarioCorreo" autocomplete="off" placeholder="nombre@gmail.com">
+    <p class="nota-catalogo">Puede ser su Gmail (entra con Google) o una cuenta creada en Firebase → Authentication → Add user (entra con correo y contraseña).</p>
+    <label for="campoUsuarioRol">Permisos</label>
+    <select id="campoUsuarioRol">
+      <option value="vendedor">🧑‍💼 Vendedor(a): solo inventario, vender y clientes</option>
+      <option value="dueno">👑 Dueño(a): acceso completo</option>
+    </select>
+    <label class="interruptor" style="margin-top:12px;"><input type="checkbox" id="campoUsuarioActivo" checked> Acceso activo</label>
+    <p class="login-error" id="errorUsuario"></p>
+    <div class="fila-botones">
+      <button class="btn secundario" id="btnCancelarUsuario">Cancelar</button>
+      <button class="btn" id="btnGuardarUsuario">Guardar</button>
+    </div>
+    <div class="fila-botones" id="filaEliminarUsuario" style="display:none;">
+      <button class="btn peligro" id="btnEliminarUsuario">Quitar acceso y borrar de la lista</button>
+    </div>
+  </div>
+</div>
 
 <!-- ============ MODAL: Producto ============ -->
 <div class="modal-overlay" id="modalProducto">
@@ -765,6 +858,10 @@
 <script src="js/negocio.js"></script>
 <script src="js/reportes.js"></script>
 <script src="js/backup.js"></script>
+<script src="js/gastos.js"></script>
+<script src="js/finanzas.js"></script>
+<script src="js/usuarios.js"></script>
 <script src="js/app.js"></script>
+<script src="js/app-finanzas.js"></script>
 </body>
 </html>

@@ -35,6 +35,7 @@ async function registrarVenta(datos) {
     total,
     ganancia: gananciaTotal,
     fecha: new Date().toISOString(),
+    vendidaPor: usuarioVentas(),
   };
 
   // Con internet: venta atómica contra el stock real de la nube.
@@ -130,7 +131,7 @@ const MOTIVOS_ANULAR = [
 
 function usuarioVentas() {
   const u = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
-  return (u && u.email) || '';
+  return String((u && u.email) || '').toLowerCase();
 }
 
 // Anula una venta: la marca como anulada (no se borra), guarda el motivo y,

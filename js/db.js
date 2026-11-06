@@ -25,7 +25,41 @@ const STORES = {
   pedidos: 'pedidos',           // encargos de clientes
   notas: 'notas',               // notas compartidas del equipo
   encargos: 'catalogo',         // catálogo público de plantas por encargo
+  usuarios: 'usuarios',         // personas con acceso y su rol (dueño / vendedor)
+  gastos: 'gastos',             // gastos del negocio (luz, transporte, bolsas...)
 };
+
+// ---------- Roles ----------
+// "dueno": ve y maneja todo. "vendedor": solo inventario (sin costos), vender
+// y clientes. Los dueños fundadores están fijos en las reglas de Firestore; las
+// demás personas se agregan desde la app (Más → Usuarios y permisos) y quedan
+// guardadas en la colección "usuarios", con el correo como identificador.
+// Pensado para membresías: cada negocio tendrá su propia lista de usuarios.
+const ROLES = { dueno: 'dueno', vendedor: 'vendedor' };
+let rolActual = null;
+
+function claveRolLocal(correo) { return 'encantos-rol:' + String(correo || '').toLowerCase(); }
+
+async function obtenerRol(user) {
+  const correo = String((user && user.email) || '').toLowerCase();
+  if (!correo) return ROLES.dueno;
+  try {
+    const snap = await firestoreDB.collection(STORES.usuarios).doc(correo).get();
+    const datos = snap.exists ? snap.data() : null;
+    const rol = datos && datos.rol === ROLES.vendedor ? ROLES.vendedor : ROLES.dueno;
+    try { localStorage.setItem(claveRolLocal(correo), rol); } catch (e) { /* sin almacenamiento */ }
+    return rol;
+  } catch (err) {
+    // Sin internet: se usa el último rol conocido en este teléfono
+    try { return localStorage.getItem(claveRolLocal(correo)) || ROLES.dueno; } catch (e) { return ROLES.dueno; }
+  }
+}
+
+function obtenerRolActual() { return rolActual; }
+function correoActual() {
+  const u = firebaseAuth.currentUser;
+  return String((u && u.email) || '').toLowerCase();
+}
 
 // Documento único con los datos públicos del negocio para el catálogo de
 // encargos (WhatsApp, cuenta bancaria para el adelanto...)
@@ -69,8 +103,17 @@ firebaseAuth.onAuthStateChanged(async (user) => {
     oyentesSesion.forEach((fn) => fn(null, 'no-autorizado', correo));
     return;
   }
-  if (user) authReadyResolve(user);
-  oyentesSesion.forEach((fn) => fn(user, user ? 'ok' : 'sin-sesion'));
+  if (user) {
+    rolActual = await obtenerRol(user);
+    // Cada rol tiene su propia pantalla: la vendedora usa vender.html
+    const pagina = window.PAGINA_APP || 'dueno';
+    if (rolActual === ROLES.vendedor && pagina !== 'vendedor') {
+      location.replace('vender.html');
+      return;
+    }
+    authReadyResolve(user);
+  }
+  oyentesSesion.forEach((fn) => fn(user, user ? 'ok' : 'sin-sesion', user ? user.email : '', rolActual));
 });
 
 function alCambiarSesion(fn) { oyentesSesion.push(fn); }
@@ -485,10 +528,28 @@ function escucharCambios(nombreTienda, callback) {
   return () => cancelar();
 }
 
+// Documentos que cumplen una condición (por ejemplo, las ventas de una vendedora).
+async function obtenerDonde(nombreTienda, campo, valor) {
+  await authReady;
+  const snap = await coleccion(nombreTienda).where(campo, '==', valor).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+function escucharDonde(nombreTienda, campo, valor, callback) {
+  let cancelar = () => {};
+  authReady.then(() => {
+    cancelar = coleccion(nombreTienda).where(campo, '==', valor).onSnapshot(
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.warn('Error escuchando cambios de ' + nombreTienda, err)
+    );
+  });
+  return () => cancelar();
+}
+
 // Exportar toda la base de datos como un objeto plano (para respaldo)
 async function exportarTodo() {
   await authReady;
-  const [productos, clientes, ventas, proveedores, compras, pedidos, notas, encargos] = await Promise.all([
+  const [productos, clientes, ventas, proveedores, compras, pedidos, notas, encargos, gastos] = await Promise.all([
     obtenerTodos(STORES.productos),
     obtenerTodos(STORES.clientes),
     obtenerTodos(STORES.ventas),
@@ -497,9 +558,10 @@ async function exportarTodo() {
     obtenerTodos(STORES.pedidos),
     obtenerTodos(STORES.notas),
     obtenerTodos(STORES.encargos),
+    obtenerTodos(STORES.gastos),
   ]);
   return {
-    version: 5,
+    version: 6,
     exportadoEl: new Date().toISOString(),
     productos,
     clientes,
@@ -509,6 +571,7 @@ async function exportarTodo() {
     pedidos,
     notas,
     encargos,
+    gastos,
   };
 }
 
@@ -542,6 +605,8 @@ async function importarTodo(data) {
     limpiarColeccion(STORES.pedidos),
     limpiarColeccion(STORES.notas),
     limpiarColeccion(STORES.encargos),
+    // Los respaldos viejos no traen gastos: en ese caso no se borran los actuales
+    ...(Array.isArray(data.gastos) ? [limpiarColeccion(STORES.gastos)] : []),
   ]);
 
   const escrituras = [];
@@ -569,6 +634,7 @@ async function importarTodo(data) {
   (data.notas || []).forEach((n) => agregarAlLote(STORES.notas, n));
   // Los respaldos de la versión del 17 de octubre guardaban los encargos como "catalogo"
   (data.encargos || data.catalogo || []).forEach((e) => agregarAlLote(STORES.encargos, e));
+  (data.gastos || []).forEach((g) => agregarAlLote(STORES.gastos, g));
 
   if (contador > 0) escrituras.push(batch.commit());
   await Promise.all(escrituras);
@@ -576,6 +642,11 @@ async function importarTodo(data) {
 
 window.DB = {
   STORES,
+  ROLES,
+  obtenerRolActual,
+  correoActual,
+  obtenerDonde,
+  escucharDonde,
   COLECCION_CONFIG,
   DOC_NEGOCIO,
   agregar,
