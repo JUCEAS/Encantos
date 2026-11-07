@@ -271,7 +271,7 @@ async function mostrarOpcionesProducto(id) {
   if ((Number(producto.stock) || 0) <= 0) {
     // Sin existencias: no se ofrece vender
     const accion = await elegirAccion(producto.nombre, [
-      { id: 'comprar', texto: '🛒 Registrar compra (reabastecer)', principal: true },
+      { id: 'comprar', texto: '📦 Registrar compra (reabastecer)', principal: true },
       { id: 'etiqueta', texto: '🏷️ Imprimir etiqueta QR' },
       { id: 'editar', texto: '✏️ Editar o eliminar' },
     ], '⛔ No se puede vender: no hay existencias (stock 0). Si compraste más, registra la compra.');
@@ -282,13 +282,15 @@ async function mostrarOpcionesProducto(id) {
   }
 
   const accion = await elegirAccion(producto.nombre, [
-    { id: 'vender', texto: '💰 Vender', principal: true },
-    { id: 'comprar', texto: '🛒 Registrar compra' },
+    { id: 'carrito', texto: '🛒 Agregar al carrito (varias plantas)', principal: true },
+    { id: 'vender', texto: '💰 Vender solo esta' },
+    { id: 'comprar', texto: '📦 Registrar compra' },
     { id: 'interesados', texto: '💎 ¿Quién busca esta planta?' },
     { id: 'etiqueta', texto: '🏷️ Imprimir etiqueta QR' },
     { id: 'editar', texto: '✏️ Editar o eliminar' },
   ]);
   if (accion === 'etiqueta') { etiquetasDeProducto(producto); return; }
+  if (accion === 'carrito') { location.href = 'vender.html?producto=' + encodeURIComponent(producto.id); return; }
   if (accion === 'interesados') {
     const hay = await avisarInteresados([producto], `💎 Interesados en ${producto.nombre}`);
     if (!hay) alert('Ningún cliente tiene esta planta (o su categoría) en su lista de plantas que anda buscando. Puedes agregarla en la ficha del cliente.');
@@ -2979,11 +2981,9 @@ document.getElementById('btnCerrarSesion').addEventListener('click', confirmarCe
 DB.authReady.then(() => {
   refrescarInventario();
   if (productoEscaneado) {
-    Escaner.tomarProductoDeLaDireccion();
-    Inventario.listarProductos().then((lista) => {
-      if (lista.some((p) => p.id === productoEscaneado)) mostrarOpcionesProducto(productoEscaneado);
-      else alert('Esa etiqueta es de un producto que ya no está en el inventario.');
-    });
+    // Escanear con la cámara del teléfono = vender: se abre el carrito con la planta
+    location.replace('vender.html?producto=' + encodeURIComponent(productoEscaneado));
+    return;
   }
   // Revisa que el catálogo público coincida con el inventario (precios, fotos,
   // disponibilidad). Solo con internet, para no gastar tiempo sin señal.

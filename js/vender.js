@@ -67,7 +67,9 @@ function ocultarModal(id) { document.getElementById(id).classList.remove('activo
 function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
 // ---------- Navegación ----------
-document.querySelectorAll('.tabbar .tab').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
+document.querySelectorAll('.tabbar .tab[data-vista]').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
+// Solo para dueños: volver a la app completa (la venta en curso queda guardada)
+document.getElementById('btnVolverDuenos').addEventListener('click', () => { location.href = 'index.html'; });
 
 function cambiarVista(nombre) {
   document.querySelectorAll('.vista').forEach((v) => v.classList.toggle('activa', v.id === 'vista-' + nombre));
@@ -558,8 +560,11 @@ btnSesion.addEventListener('click', () => {
 DB.authReady.then(async () => {
   const correo = DB.correoActual();
   // Nombre de la vendedora y del negocio (pensado para usar la app con otras marcas)
+  // Los dueños también venden con el carrito: tienen un botón para volver a su app
+  if (DB.obtenerRolActual() === DB.ROLES.dueno) document.getElementById('btnVolverDuenos').style.display = '';
+  const usuarioFirebase = firebase.auth().currentUser;
   DB.obtener(DB.STORES.usuarios, correo).then((u) => {
-    nombreVendedora = (u && u.nombre) || correo.split('@')[0];
+    nombreVendedora = (u && u.nombre) || (usuarioFirebase && usuarioFirebase.displayName ? usuarioFirebase.displayName.split(' ')[0] : correo.split('@')[0]);
     document.getElementById('saludo').textContent = `Hola, ${nombreVendedora} 👋`;
   }).catch(() => {});
   DB.obtenerDocumento(DB.COLECCION_CONFIG, DB.DOC_NEGOCIO).then((n) => {
