@@ -544,3 +544,17 @@ label.fila-check input[type="checkbox"] { width: auto; margin: 0 8px 0 0; }
 
 /* Acceso de los dueños a la venta con carrito */
 .btn-carrito-duenos { display: block; text-align: center; text-decoration: none; margin: 0 0 12px; }
+
+/* ---------- Publicidad: crear publicación y completar con IA ---------- */
+#btnCompletarIA { display: none; }
+.publicacion .modal { max-height: 92vh; overflow-y: auto; }
+.pub-formatos { display: flex; gap: 6px; }
+.pub-formato { flex: 1; border: 1px solid var(--borde); background: #fff; border-radius: 10px; padding: 8px; font-family: inherit; font-size: 14px; color: #333; cursor: pointer; }
+.pub-formato.activo { border-color: var(--verde); background: #e6efe2; color: var(--verde); font-weight: 600; }
+.pub-lienzo { width: 100%; height: auto; border-radius: 12px; background: #eee; display: block; }
+.pub-lienzo.historia { width: 62%; margin: 0 auto; }
+.pub-label { font-size: 14px; font-weight: 600; margin: 4px 0 -4px; }
+.pub-texto { width: 100%; min-height: 190px; font-family: inherit; font-size: 14px; border: 1px solid var(--borde); border-radius: 10px; padding: 10px; resize: vertical; }
+.pub-fila { display: flex; gap: 8px; }
+.pub-fila .btn { flex: 1; }
+.pub-nota { font-size: 12px; color: #666; margin: 0; line-height: 1.4; }

@@ -1,0 +1,28 @@
+ENCANTOS IA — Cómo publicar el Worker (una sola vez, unos 5 minutos)
+====================================================================
+
+Este Worker es el "cerebro" que busca los cuidados de cada planta y escribe
+textos para redes. Usa la IA de Cloudflare: NO necesita clave ni tarjeta.
+El plan gratis alcanza para cientos de consultas al día.
+
+1. Entra a dash.cloudflare.com con juceas19@gmail.com.
+2. Menú izquierdo: Compute (Workers) → Workers & Pages → botón "Create".
+3. Elige "Start with Hello World!" (o "Create Worker").
+4. En el nombre escribe exactamente:  encantos-ia
+   (así la dirección queda: https://encantos-ia.juceas19.workers.dev)
+5. Toca "Deploy". Luego "Edit code".
+6. Borra todo el código que aparece y pega TODO el contenido del archivo
+   worker/encantos-ia.js. Toca "Deploy" otra vez.
+7. Regresa al Worker → pestaña "Settings" → "Bindings" → "Add binding"
+   → elige "Workers AI" → en "Variable name" escribe:  AI  → "Deploy".
+8. Prueba: abre https://encantos-ia.juceas19.workers.dev en el navegador.
+   Debe decir: Encantos IA funcionando ✅
+
+Listo. En la app de Encantos:
+- Al agregar o editar una planta: botón "✨ Completar ficha con IA".
+- Si identificas con foto (Pl@ntNet) y la planta no tenía ficha guardada,
+  la app busca los cuidados con IA sola.
+- En el inventario, toca una planta → "📣 Crear publicación para redes".
+
+Si le pusiste otro nombre al Worker, la app te pedirá la dirección la primera
+vez que falle; pégala y queda guardada para todo el equipo.

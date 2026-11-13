@@ -285,11 +285,13 @@ async function mostrarOpcionesProducto(id) {
     { id: 'carrito', texto: '🛒 Agregar al carrito (varias plantas)', principal: true },
     { id: 'vender', texto: '💰 Vender solo esta' },
     { id: 'comprar', texto: '📦 Registrar compra' },
+    { id: 'publicar', texto: '📣 Crear publicación para redes' },
     { id: 'interesados', texto: '💎 ¿Quién busca esta planta?' },
     { id: 'etiqueta', texto: '🏷️ Imprimir etiqueta QR' },
     { id: 'editar', texto: '✏️ Editar o eliminar' },
   ]);
   if (accion === 'etiqueta') { etiquetasDeProducto(producto); return; }
+  if (accion === 'publicar') { Publicidad.crearPublicacion(producto); return; }
   if (accion === 'carrito') { location.href = 'vender.html?producto=' + encodeURIComponent(producto.id); return; }
   if (accion === 'interesados') {
     const hay = await avisarInteresados([producto], `💎 Interesados en ${producto.nombre}`);
@@ -413,6 +415,7 @@ async function abrirModalProducto(producto = null) {
   document.getElementById('filaEliminarProducto').style.display = producto ? 'flex' : 'none';
   actualizarFormularioSegunCategoria();
   actualizarBotonIdentificar();
+  if (window.Publicidad) Publicidad.actualizarBotonIA();
   document.getElementById('notaIdentificacion').textContent = '';
 
   mostrarModal('modalProducto');
@@ -455,6 +458,7 @@ async function manejarSeleccionFotoProducto(e) {
   preview.style.display = 'block';
   actualizarAvisoCatalogo();
   actualizarBotonIdentificar();
+  if (window.Publicidad) Publicidad.actualizarBotonIA();
 
   // Generar la huella visual en segundo plano para habilitar la búsqueda por foto
   try {
@@ -711,6 +715,8 @@ async function aplicarIdentificacion(x) {
       : `✅ Identificada. Los cuidados ya estaban llenos, no se cambió nada.`)
     : `ℹ️ Identificada como ${x.cientifico}, pero aún no tengo su ficha de cuidados: llena luz y riego a mano. La próxima vez que identifiques una igual, la app usará lo que guardes ahora.`;
   actualizarAvisoCatalogo();
+  // Sin ficha guardada: se busca con IA (luz, riego, descripción...)
+  if (!ficha && window.Publicidad) Publicidad.completarFichaConIA({ auto: true });
 }
 
 document.getElementById('btnIdentificarPlanta').addEventListener('click', identificarPlantaConFoto);
